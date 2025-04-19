@@ -1,16 +1,18 @@
 #pragma once
 
-#include "MediaInfo.hpp"
-
 #include <span>
+#include <cstdint>
+#include <memory>
 
 namespace sklepan {
 
 struct MediaSample {
-    size_t trackId;
     int64_t pts;
-    int64_t dts;  
-    std::span<uint8_t> data;  
+    int64_t dts;
+    int64_t duration;
+    size_t size;
+    size_t trackId;
+    std::span<uint8_t> data;
 };
 
 } // namespace sklepan

@@ -4,6 +4,7 @@ set(SOURCE_FILES
     ${CMAKE_CURRENT_LIST_DIR}/source/sklepan/FFMpegMediaExtractor.cpp
     ${CMAKE_CURRENT_LIST_DIR}/source/sklepan/MediaPipeline.cpp
     ${CMAKE_CURRENT_LIST_DIR}/source/sklepan/Player.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/source/sklepan/Track.cpp
 )
 
 # Find external dependencies

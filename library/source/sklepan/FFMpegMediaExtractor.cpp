@@ -76,7 +76,7 @@ MediaInfo FFMpegMediaExtractor::getMediaInfo() {
         switch (codecpar->codec_type) {
             case AVMEDIA_TYPE_AUDIO: {
                 AudioTrackInfo audioTrack;
-                audioTrack.type = TrackType::AUDIO;
+                audioTrack.type = TrackType::audio;
                 audioTrack.trackId = i;
                 audioTrack.sampleRate = codecpar->sample_rate;
                 audioTrack.channels = codecpar->ch_layout.nb_channels;
@@ -89,7 +89,7 @@ MediaInfo FFMpegMediaExtractor::getMediaInfo() {
                 LOG_DEBUG("FFMpegMediaExtractor - Height: {}", codecpar->height);
                 VideoTrackInfo videoTrack;
                 videoTrack.trackId = i;
-                videoTrack.type = TrackType::VIDEO;
+                videoTrack.type = TrackType::video;
                 videoTrack.width = codecpar->width;
                 videoTrack.height = codecpar->height;
                 videoTrack.frameRate = av_q2d(stream->avg_frame_rate);
@@ -97,10 +97,10 @@ MediaInfo FFMpegMediaExtractor::getMediaInfo() {
                 mediaInfo.tracks.push_back(std::make_shared<VideoTrackInfo>(videoTrack));
             } break;
             case AVMEDIA_TYPE_SUBTITLE: {
-                Track subtitleTrack;
+                TrackInfo subtitleTrack;
                 subtitleTrack.trackId = i;
-                subtitleTrack.type = TrackType::SUBTITLE;
-                mediaInfo.tracks.push_back(std::make_shared<Track>(subtitleTrack));
+                subtitleTrack.type = TrackType::subtitle;
+                mediaInfo.tracks.push_back(std::make_shared<TrackInfo>(subtitleTrack));
             } break;
             default:
                 LOG_WARN("Unknown track type - ID: {}", i);

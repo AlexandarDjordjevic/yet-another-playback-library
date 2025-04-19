@@ -3,6 +3,7 @@
 #include "IMediaSource.hpp"
 #include "IMediaExtractor.hpp"
 #include "MediaInfo.hpp"
+#include "Track.hpp"
 
 #include <memory>
 
@@ -24,10 +25,12 @@ public:
     
 private:
     bool _running;
-    std::thread _worker;
+    std::thread _sampleReader;
+    std::thread _sampleDecoder;
     MediaInfo _mediaInfo;
     std::shared_ptr<IMediaSource> _mediaSource;
     std::unique_ptr<IMediaExtractor> _mediaExtractor;
+    std::vector<std::shared_ptr<Track>> _tracks;
 };
 
 } // namespace sklepan
