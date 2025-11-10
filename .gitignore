@@ -1,3 +1,7 @@
 build/
 .vscode/
 BigBuckBunny.mp4
+cmake_build_debug/
+.idea/
+docs/
+video_samples/

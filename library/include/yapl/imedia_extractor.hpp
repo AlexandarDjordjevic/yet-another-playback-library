@@ -1,18 +1,15 @@
 #pragma once
 
-#include "MediaInfo.hpp"
-#include "MediaSample.hpp"
+#include "yapl/media_info.hpp"
+#include "yapl/media_sample.hpp"
 
-#include <cstddef>
-#include <span>
+namespace yapl {
 
-namespace sklepan {
-
-struct IMediaExtractor {
-    virtual ~IMediaExtractor() = default;
+struct imedia_extractor {
+    virtual ~imedia_extractor() = default;
     virtual void start() = 0;
-    virtual MediaInfo getMediaInfo() = 0;
-    virtual std::shared_ptr<MediaSample> readSample() = 0;
+    virtual media_info get_media_info() = 0;
+    virtual std::shared_ptr<media_sample> read_sample() = 0;
 
     // virtual void seek(std::chrono::seconds position) = 0;
     // virtual std::chrono::seconds getDuration() const = 0;
@@ -21,4 +18,4 @@ struct IMediaExtractor {
     // virtual size_t getBitRate() const = 0;
 };
 
-} // namespace sklepan
+} // namespace yapl

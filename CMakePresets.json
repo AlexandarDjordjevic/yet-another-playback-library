@@ -1,0 +1,42 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "debug",
+            "displayName": "Debug Config",
+            "description": "Debug build with full optimization disabled and debug info",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_CXX_STANDARD": "17",
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_GENERATOR": "Ninja",
+                "CMAKE_CXX_FLAGS_DEBUG": "-g3 -O0 -Wall -Wextra -Wpedantic -Werror",
+                "CMAKE_VERBOSE_MAKEFILE": "ON"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "debug",
+            "configurePreset": "debug",
+            "jobs": 8
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "debug",
+            "configurePreset": "debug",
+            "output": {
+                "outputOnFailure": true,
+                "verbosity": "verbose"
+            },
+            "execution": {
+                "jobs": 8,
+                "noTestsAction": "error"
+            }
+        }
+    ]
+}
