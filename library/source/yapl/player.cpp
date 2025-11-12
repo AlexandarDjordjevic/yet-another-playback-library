@@ -10,8 +10,7 @@ player::player() { LOG_INFO("player initialized"); }
 void player::load(const std::string_view url) {
     LOG_DEBUG("Player -> loading media from URL: {}", std::string(url));
     m_media_pipeline.load(url);
-    m_media_info = m_media_pipeline.get_media_info();
-    LOG_DEBUG("{}", to_string(m_media_info));
+    LOG_DEBUG("{}", to_string(m_media_pipeline.get_media_info()));
 }
 
 void player::play() {

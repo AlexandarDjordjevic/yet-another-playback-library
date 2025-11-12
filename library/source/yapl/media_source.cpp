@@ -35,4 +35,6 @@ size_t media_source::available() const {
     return m_data_source->available();
 }
 
+void media_source::reset() { m_data_source->reset(); }
+
 } // namespace yapl

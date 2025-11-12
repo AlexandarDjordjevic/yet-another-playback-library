@@ -19,6 +19,7 @@ class file_data_source : public idata_source {
     bool is_open() const override;
     size_t read_data(size_t size, std::span<uint8_t> buffer) override;
     size_t available() const override;
+    void reset() override;
 
   private:
     std::string m_file_path;

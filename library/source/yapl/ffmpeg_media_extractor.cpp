@@ -6,31 +6,30 @@
 #include "yapl/track_info.hpp"
 
 #include <cstdint>
+#include <iostream>
+#include <libavcodec/packet.h>
 #include <memory>
+#include <vector>
 
 namespace yapl {
 
 ffmpeg_media_extractor::ffmpeg_media_extractor(
     std::shared_ptr<imedia_source> _media_source)
-    : m_media_source{_media_source},
-      m_media_sample{std::make_shared<media_sample>()}, m_fmt_ctx{nullptr},
-      m_avio_ctx{nullptr} {
+    : m_media_source{_media_source}, m_fmt_ctx{nullptr}, m_avio_ctx{nullptr} {
+    // Do not write to a file here - extractor should expose packets and
+    // extradata so callers can persist data into their own format. Previously
+    // this class wrote to test_samples/extractor.bin; that responsibility has
+    // been removed.
+
     avformat_network_init();
 
     auto av_read_packet = [](void *opaque, uint8_t *buf, int buf_size) -> int {
         auto media_source = static_cast<imedia_source *>(opaque);
-        LOG_DEBUG("ffmpeg_media_extractor - Reading data from media source. "
-                  "Buffer size: {}",
-                  buf_size);
-        auto available = media_source->available();
-        LOG_DEBUG("ffmpeg_media_extractor - Available data: {}", available);
-
         auto read = media_source->read_packet(
             buf_size, {buf, static_cast<size_t>(buf_size)});
         if (read == 0) {
             return AVERROR_EOF;
         }
-        LOG_DEBUG("ffmpeg_media_extractor - Read packet: {}", buf_size);
         return buf_size;
     };
 
@@ -51,14 +50,13 @@ ffmpeg_media_extractor::ffmpeg_media_extractor(
 }
 
 void ffmpeg_media_extractor::start() {
-    LOG_DEBUG("ffmpeg_media_extractor - start");
     if (avformat_open_input(&m_fmt_ctx, nullptr, nullptr, nullptr) < 0) {
         throw std::runtime_error("Could not open input from buffer");
     }
+    m_media_info = read_media_info();
 }
 
 ffmpeg_media_extractor::~ffmpeg_media_extractor() {
-    LOG_INFO("ffmpeg_media_extractor - Destructor called");
     if (m_avio_ctx) {
         av_free(m_avio_ctx->buffer);
         avio_context_free(&m_avio_ctx);
@@ -69,8 +67,11 @@ ffmpeg_media_extractor::~ffmpeg_media_extractor() {
     avformat_network_deinit();
 }
 
-media_info ffmpeg_media_extractor::get_media_info() {
-    LOG_INFO("ffmpeg_media_extractor - Getting media info");
+std::shared_ptr<media_info> ffmpeg_media_extractor::get_media_info() const {
+    return m_media_info;
+}
+
+std::shared_ptr<media_info> ffmpeg_media_extractor::read_media_info() {
 
     if (avformat_find_stream_info(m_fmt_ctx, nullptr) < 0) {
         throw std::runtime_error("Could not find stream info");
@@ -90,6 +91,18 @@ media_info ffmpeg_media_extractor::get_media_info() {
         track_info _track{};
         _track.track_id = i;
         _track.codec_id = codecpar->codec_id;
+        _track.extra_data = std::make_shared<stream_extra_data>(
+            std::span<uint8_t>{codecpar->extradata,
+                               codecpar->extradata + codecpar->extradata_size});
+
+        std::cout << "Extra data: \n";
+        for (auto x : std::span<uint8_t>{codecpar->extradata,
+                                         codecpar->extradata +
+                                             codecpar->extradata_size}) {
+            std::cout << (int)x << ", ";
+        }
+        std::cout << "\n Extra data size: " << codecpar->extradata_size << "\n";
+
         switch (codecpar->codec_type) {
         case AVMEDIA_TYPE_AUDIO: {
             _track.type = track_type::audio;
@@ -119,8 +132,80 @@ media_info ffmpeg_media_extractor::get_media_info() {
         }
     }
 
-    return _media_info;
+    return std::make_shared<media_info>(_media_info);
 }
+
+enum class nal_unit_type {
+    unspecified = 0,
+    coded_sliece = 1, // non-keyframe
+    data_partition_a = 2,
+    data_partition_b = 3,
+    data_partition_c = 4,
+    idr_slice = 5, // keyframe
+    sei = 6,
+    sps = 7,
+    pps = 8,
+    aud = 9,
+    end_of_sequence = 10,
+    end_of_stream = 11,
+    filter_data = 12, // padding
+};
+
+std::string to_string(nal_unit_type nu) {
+    switch (nu) {
+    default:
+    case nal_unit_type::unspecified:
+        return "Unspecified";
+    case nal_unit_type::coded_sliece:
+        return "Coded Sliece";
+    case nal_unit_type::data_partition_a:
+        return "Data Partition a";
+    case nal_unit_type::data_partition_b:
+        return "Data Partition b";
+    case nal_unit_type::data_partition_c:
+        return "Data Partition c";
+    case nal_unit_type::idr_slice:
+        return "IDR Slice";
+    case nal_unit_type::sei:
+        return "Supplemental Enhancement Information (SEI)";
+    case nal_unit_type::sps:
+        return "Sequence Parameter Set (SPS)";
+    case nal_unit_type::pps:
+        return "Picture Parameter Set (PPS)";
+    case nal_unit_type::aud:
+        return "Access Unit Delimiter (AUD)";
+    case nal_unit_type::end_of_sequence:
+        return "End Of Sequence";
+    case nal_unit_type::end_of_stream:
+        return "End Of Stream";
+    case nal_unit_type::filter_data:
+        return "Filter Data";
+    }
+}
+
+struct nal_unit {
+    nal_unit(size_t nal_size_len, std::span<uint8_t> unit) {
+        auto pos = 0;
+        for (size_t i = 0; i < nal_size_len; ++i) {
+            size = (size << 8) | unit[pos++];
+        }
+        header.value = unit[pos];
+        auto begin = unit.begin() + pos;
+        auto end = unit.begin() + pos + size;
+        data = {begin, end};
+    }
+
+    uint32_t size;
+    union {
+        struct {
+            nal_unit_type type : 5;
+            uint8_t ref_idc : 2;
+            uint8_t header : 1;
+        } fields;
+        uint8_t value;
+    } header;
+    std::span<uint8_t> data;
+};
 
 std::shared_ptr<media_sample> ffmpeg_media_extractor::read_sample() {
     if (av_read_frame(m_fmt_ctx, &m_pkt) < 0) {
@@ -138,13 +223,69 @@ std::shared_ptr<media_sample> ffmpeg_media_extractor::read_sample() {
         return {};
     }
 
-    m_media_sample->track_id = m_pkt.stream_index;
-    m_media_sample->pts = m_pkt.pts;
-    m_media_sample->dts = m_pkt.dts;
-    m_media_sample->duration = m_pkt.duration;
-    m_media_sample->data = std::span<uint8_t>(m_pkt.data, m_pkt.size);
+    auto sample = std::make_shared<media_sample>();
+    sample->track_id = m_pkt.stream_index;
+    sample->pts = m_pkt.pts;
+    sample->dts = m_pkt.dts;
+    sample->duration = m_pkt.duration;
+    packet_to_annexb(m_pkt, sample);
+
     av_packet_unref(&m_pkt);
-    return m_media_sample;
+    return sample;
+}
+
+static bool looks_like_annexb(const uint8_t *data, size_t size) {
+    if (!data || size == 0)
+        return false;
+
+    if (size >= 4) {
+        if (data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x00 &&
+            data[3] == 0x01)
+            return true;
+    }
+    if (size >= 3) {
+        if (data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x01)
+            return true;
+    }
+    return false;
+}
+
+void ffmpeg_media_extractor::packet_to_annexb(
+    AVPacket &pkt, std::shared_ptr<media_sample> &sample) const {
+
+    if (!sample || looks_like_annexb(pkt.data, pkt.size))
+        return;
+
+    auto _media_info = get_media_info();
+    auto nal_size_length =
+        _media_info->tracks[pkt.stream_index]->extra_data->nal_size_length;
+
+    uint8_t *data = pkt.data;
+
+    while (data <= (pkt.data + pkt.size)) {
+        nal_unit nu(nal_size_length, {data, pkt.data + pkt.size});
+        LOG_CRITICAL("Nal size: {}. Nal type: {}", nu.size,
+                     to_string(nu.header.fields.type));
+
+        if (nu.header.fields.type == nal_unit_type::idr_slice) {
+            auto &sps_data =
+                _media_info->tracks[pkt.stream_index]->extra_data->sps_data;
+            auto &pps_data =
+                _media_info->tracks[pkt.stream_index]->extra_data->pps_data;
+            uint8_t start_code[]{0, 0, 0, 1};
+            sample->data.insert(sample->data.end(), start_code, start_code + 4);
+            sample->data.insert(sample->data.end(), sps_data.begin(),
+                                sps_data.end());
+            sample->data.insert(sample->data.end(), start_code, start_code + 4);
+            sample->data.insert(sample->data.end(), pps_data.begin(),
+                                pps_data.end());
+        }
+
+        uint8_t start_code[]{0, 0, 0, 1};
+        sample->data.insert(sample->data.end(), start_code, start_code + 4);
+        sample->data.insert(sample->data.end(), nu.data.begin(), nu.data.end());
+        data += nal_size_length + nu.size;
+    }
 }
 
 } // namespace yapl

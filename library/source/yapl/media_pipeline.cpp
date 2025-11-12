@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <libavcodec/codec_id.h>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -18,6 +19,8 @@
 using namespace std::chrono_literals;
 
 namespace yapl {
+
+static FILE *fp;
 
 media_pipeline::media_pipeline() {
     // TODO: Refactor -> Media pipeline should get a media source factory
@@ -33,7 +36,8 @@ media_pipeline::media_pipeline() {
     }
 
     // TODO: Refactor -> media pipeline should get a decoder factory
-    m_video_decoder = std::make_unique<decoders::ffmpeg::video_decoder>();
+
+    // fp = fopen("bufferd_data.bin", "wb");
 
     m_buffering_thread = std::thread([this]() {
         while (true) {
@@ -48,7 +52,10 @@ media_pipeline::media_pipeline() {
                       sample->duration);
 
             m_tracks[sample->track_id]->push_sample(sample);
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+            // fwrite(sample->data.data(), 1, sample->data.size(), fp);
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     });
 
@@ -64,10 +71,7 @@ media_pipeline::media_pipeline() {
                 });
 
             auto sample = video_track->pop_sample();
-            LOG_DEBUG(
-                "Video decoder thread - pop sample dts {}, pts {}, duration {}",
-                sample->dts, sample->pts, sample->duration);
-            auto decoded = std::make_shared<decoded_media_sample>();
+            auto decoded = std::make_shared<media_sample>();
 
             m_video_decoder->decode(m_tracks[sample->track_id]->get_info(),
                                     sample, decoded);
@@ -82,6 +86,8 @@ media_pipeline::~media_pipeline() {
     if (m_buffering_thread.joinable()) {
         m_buffering_thread.join();
     }
+    fclose(fp);
+
     LOG_INFO("media_pipeline destructor called");
 }
 
@@ -92,12 +98,18 @@ void media_pipeline::load(const std::string_view url) {
 
     m_media_source->open(url);
     m_media_extractor->start();
-    m_media_info = m_media_extractor->get_media_info();
-    for (const auto &_track_info : m_media_info.tracks) {
+    auto _media_info = m_media_extractor->get_media_info();
+    for (const auto &_track_info : _media_info->tracks) {
         LOG_DEBUG("media_pipeline - Track ID: {}, Type: {}",
                   _track_info->track_id, static_cast<int>(_track_info->type));
         m_tracks.emplace_back(std::make_shared<track>(_track_info));
+
+        if (_track_info->type == track_type::video) {
+            m_video_decoder = std::make_unique<decoders::ffmpeg::video_decoder>(
+                static_cast<AVCodecID>(_track_info->codec_id));
+        }
     }
+    m_media_source->reset();
 }
 
 void media_pipeline::play() {
@@ -127,7 +139,9 @@ void media_pipeline::seek([[maybe_unused]] float position) {
     // Implement seek logic
 }
 
-media_info media_pipeline::get_media_info() const { return m_media_info; }
+std::shared_ptr<media_info> media_pipeline::get_media_info() const {
+    return m_media_extractor->get_media_info();
+}
 
 void media_pipeline::register_buffer_update_handler(
     [[maybe_unused]] std::function<void(size_t, size_t)> callback) {}

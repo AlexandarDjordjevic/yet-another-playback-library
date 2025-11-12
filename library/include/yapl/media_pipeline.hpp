@@ -24,7 +24,7 @@ class media_pipeline {
     void pause_buffering();
     void stop();
     void seek(float position);
-    media_info get_media_info() const;
+    std::shared_ptr<media_info> get_media_info() const;
     void register_buffer_update_handler(
         std::function<void(size_t, size_t)> callback);
 
@@ -35,7 +35,6 @@ class media_pipeline {
     std::thread m_buffering_thread;
     bool m_buffering{};
     std::thread m_video_decoder_thread;
-    media_info m_media_info;
     std::shared_ptr<imedia_source> m_media_source;
     std::unique_ptr<imedia_extractor> m_media_extractor;
     std::vector<std::shared_ptr<track>> m_tracks;

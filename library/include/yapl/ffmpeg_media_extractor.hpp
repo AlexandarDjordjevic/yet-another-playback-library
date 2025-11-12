@@ -4,6 +4,8 @@
 #include "yapl/imedia_source.hpp"
 #include "yapl/media_info.hpp"
 #include "yapl/media_sample.hpp"
+#include <memory>
+#include <vector>
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -15,17 +17,32 @@ namespace yapl {
 
 struct ffmpeg_media_extractor : public imedia_extractor {
     ffmpeg_media_extractor(std::shared_ptr<imedia_source> mediaSource);
+
     ~ffmpeg_media_extractor();
+
     void start() override;
-    media_info get_media_info() override;
+
+    std::shared_ptr<media_info> get_media_info() const override;
+
     std::shared_ptr<media_sample> read_sample() override;
 
   private:
+    std::shared_ptr<media_info> read_media_info();
+
+    void packet_to_annexb(AVPacket &pkt,
+                          std::shared_ptr<media_sample> &sample) const;
+
+  private:
     std::shared_ptr<imedia_source> m_media_source;
-    std::shared_ptr<media_sample> m_media_sample;
+
+    std::shared_ptr<media_info> m_media_info;
+
     AVPacket m_pkt;
+
     AVFormatContext *m_fmt_ctx;
+
     uint8_t *m_avio_buffer;
+
     AVIOContext *m_avio_ctx;
 };
 

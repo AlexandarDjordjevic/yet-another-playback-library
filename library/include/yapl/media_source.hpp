@@ -30,6 +30,8 @@ struct media_source : public imedia_source {
 
     size_t available() const override;
 
+    void reset() override;
+
   private:
     std::shared_ptr<idata_source> m_data_source;
 };

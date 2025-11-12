@@ -8,7 +8,7 @@ namespace yapl {
 struct imedia_extractor {
     virtual ~imedia_extractor() = default;
     virtual void start() = 0;
-    virtual media_info get_media_info() = 0;
+    virtual std::shared_ptr<media_info> get_media_info() const = 0;
     virtual std::shared_ptr<media_sample> read_sample() = 0;
 
     // virtual void seek(std::chrono::seconds position) = 0;

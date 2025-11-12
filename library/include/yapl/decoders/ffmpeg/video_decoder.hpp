@@ -3,17 +3,34 @@
 #include "yapl/decoders/idecoder.hpp"
 #include "yapl/media_sample.hpp"
 #include "yapl/track_info.hpp"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include <libavcodec/avcodec.h>
+#include <libavcodec/codec.h>
+#include <libavcodec/codec_id.h>
+#include <libavcodec/codec_par.h>
+#ifdef __cplusplus
+}
+#endif
+
 #include <memory>
 
 namespace yapl::decoders::ffmpeg {
 
 struct video_decoder : public idecoder {
-    video_decoder();
+    video_decoder(AVCodecID codec_id);
     ~video_decoder() override;
 
     bool decode(std::shared_ptr<track_info> info,
                 std::shared_ptr<media_sample> sample,
-                std::shared_ptr<decoded_media_sample> decoded_sample) override;
+                std::shared_ptr<media_sample> decoded_sample) override;
+
+  private:
+    AVCodecParameters *m_codecpar;
+    AVCodecContext *m_codec_ctx;
+    AVFrame *m_frame;
 };
 
 } // namespace yapl::decoders::ffmpeg

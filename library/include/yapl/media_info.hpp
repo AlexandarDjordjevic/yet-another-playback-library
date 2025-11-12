@@ -16,10 +16,11 @@ struct media_info {
     std::vector<std::shared_ptr<track_info>> tracks;
 };
 
-static inline std::string to_string(const media_info &media_info) {
+static inline std::string
+to_string(const std::shared_ptr<media_info> media_info) {
     std::string out;
     out += fmt::format("[Media info]: Duration: {}  Number of tracks: {} - ",
-                       media_info.duration, media_info.number_of_tracks);
+                       media_info->duration, media_info->number_of_tracks);
 
     // Group tracks by type
     std::vector<std::shared_ptr<track_info>> audio_tracks;
@@ -27,7 +28,7 @@ static inline std::string to_string(const media_info &media_info) {
     std::vector<std::shared_ptr<track_info>> subtitle_tracks;
     std::vector<std::shared_ptr<track_info>> unknown_tracks;
 
-    for (const auto &track : media_info.tracks) {
+    for (const auto &track : media_info->tracks) {
         switch (track->type) {
         case track_type::audio:
             audio_tracks.push_back(track);

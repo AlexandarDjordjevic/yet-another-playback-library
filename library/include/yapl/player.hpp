@@ -24,7 +24,6 @@ class player {
         std::function<void(size_t, size_t)> callback);
 
   private:
-    media_info m_media_info;
     media_pipeline m_media_pipeline;
 };
 

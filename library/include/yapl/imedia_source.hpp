@@ -12,6 +12,7 @@ struct imedia_source {
     virtual void close() = 0;
     virtual size_t read_packet(size_t size, std::span<uint8_t> buffer) = 0;
     virtual size_t available() const = 0;
+    virtual void reset() = 0;
 };
 
-}  // namespace yapl
+} // namespace yapl
