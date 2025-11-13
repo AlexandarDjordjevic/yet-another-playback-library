@@ -1,12 +1,13 @@
 #include "yapl/ffmpeg_media_extractor.hpp"
 #include "yapl/debug.hpp"
+#include "yapl/imedia_extractor.hpp"
 #include "yapl/imedia_source.hpp"
 #include "yapl/media_info.hpp"
 #include "yapl/media_sample.hpp"
 #include "yapl/track_info.hpp"
 
+#include <cstddef>
 #include <cstdint>
-#include <iostream>
 #include <libavcodec/packet.h>
 #include <memory>
 #include <vector>
@@ -30,7 +31,7 @@ ffmpeg_media_extractor::ffmpeg_media_extractor(
         if (read == 0) {
             return AVERROR_EOF;
         }
-        return buf_size;
+        return read;
     };
 
     m_avio_buffer = static_cast<uint8_t *>(av_malloc(4096));
@@ -85,23 +86,12 @@ std::shared_ptr<media_info> ffmpeg_media_extractor::read_media_info() {
         AVStream *stream = m_fmt_ctx->streams[i];
         AVCodecParameters *codecpar = stream->codecpar;
 
-        LOG_INFO("Codec info: id {}, name {}", (int)stream->codecpar->codec_id,
-                 avcodec_get_name(stream->codecpar->codec_id));
-
         track_info _track{};
         _track.track_id = i;
         _track.codec_id = codecpar->codec_id;
         _track.extra_data = std::make_shared<stream_extra_data>(
             std::span<uint8_t>{codecpar->extradata,
                                codecpar->extradata + codecpar->extradata_size});
-
-        std::cout << "Extra data: \n";
-        for (auto x : std::span<uint8_t>{codecpar->extradata,
-                                         codecpar->extradata +
-                                             codecpar->extradata_size}) {
-            std::cout << (int)x << ", ";
-        }
-        std::cout << "\n Extra data size: " << codecpar->extradata_size << "\n";
 
         switch (codecpar->codec_type) {
         case AVMEDIA_TYPE_AUDIO: {
@@ -207,31 +197,48 @@ struct nal_unit {
     std::span<uint8_t> data;
 };
 
-std::shared_ptr<media_sample> ffmpeg_media_extractor::read_sample() {
-    if (av_read_frame(m_fmt_ctx, &m_pkt) < 0) {
-        LOG_ERROR("ffmpeg_media_extractor - Error reading frame");
-        return {};
+read_frame_result ffmpeg_media_extractor::read_sample() {
+    read_frame_result output;
+    if (auto ret = av_read_frame(m_fmt_ctx, &m_pkt); ret < 0) {
+        if (AVERROR_EOF) {
+            LOG_INFO("ffmpeg_media_extractor - EOS Reached");
+            return {.error = read_sample_error_t::end_of_stream, .sample = {}};
+        }
+
+        char buffer[1024]{0};
+        av_strerror(ret, buffer, 1024);
+        LOG_CRITICAL("[FFMPEG Media Extractor] Read frame error: {}.", buffer);
+        return {.error = read_sample_error_t::invalid_sample, .sample = {}};
     }
 
     if (m_pkt.size <= 0) {
-        LOG_ERROR("ffmpeg_media_extractor - Invalid packet size");
-        return {};
+        LOG_ERROR("ffmpeg_media_extractor - Invalid packet size <= 0");
+        return {.error = read_sample_error_t::invalid_packet_size,
+                .sample = {}};
     }
 
     if (static_cast<uint32_t>(m_pkt.stream_index) >= m_fmt_ctx->nb_streams) {
         LOG_ERROR("ffmpeg_media_extractor - Invalid stream index");
-        return {};
+        return {.error = read_sample_error_t::invalid_stream_index,
+                .sample = {}};
     }
 
+    static size_t debug_id{0};
+
     auto sample = std::make_shared<media_sample>();
+    sample->debug_id = debug_id++;
     sample->track_id = m_pkt.stream_index;
     sample->pts = m_pkt.pts;
     sample->dts = m_pkt.dts;
     sample->duration = m_pkt.duration;
+
+    LOG_DEBUG("Sample debug id {}, pts {}, dts {}", sample->debug_id,
+              sample->pts, sample->dts);
+
     packet_to_annexb(m_pkt, sample);
 
     av_packet_unref(&m_pkt);
-    return sample;
+    return {.error = read_sample_error_t::no_errror, .sample = sample};
 }
 
 static bool looks_like_annexb(const uint8_t *data, size_t size) {
@@ -252,7 +259,6 @@ static bool looks_like_annexb(const uint8_t *data, size_t size) {
 
 void ffmpeg_media_extractor::packet_to_annexb(
     AVPacket &pkt, std::shared_ptr<media_sample> &sample) const {
-
     if (!sample || looks_like_annexb(pkt.data, pkt.size))
         return;
 
@@ -262,12 +268,22 @@ void ffmpeg_media_extractor::packet_to_annexb(
 
     uint8_t *data = pkt.data;
 
-    while (data <= (pkt.data + pkt.size)) {
+    while (data < (pkt.data + pkt.size)) {
         nal_unit nu(nal_size_length, {data, pkt.data + pkt.size});
-        LOG_CRITICAL("Nal size: {}. Nal type: {}", nu.size,
-                     to_string(nu.header.fields.type));
+        LOG_TRACE("Nal size: {}. Nal type: {}", nu.size,
+                  to_string(nu.header.fields.type));
 
-        if (nu.header.fields.type == nal_unit_type::idr_slice) {
+        if (nu.size == 0 ||
+            nu.header.fields.type == nal_unit_type::unspecified) {
+            LOG_INFO("Nu size {}, type {}", nu.size,
+                     to_string(nu.header.fields.type));
+        }
+        if (nu.header.fields.type == nal_unit_type::end_of_stream) {
+            LOG_INFO(">>>>>>>>>>>EOS<<<<<<<<<");
+        }
+
+        if (nu.header.fields.type == nal_unit_type::idr_slice ||
+            nu.header.fields.type == nal_unit_type::coded_sliece) {
             auto &sps_data =
                 _media_info->tracks[pkt.stream_index]->extra_data->sps_data;
             auto &pps_data =

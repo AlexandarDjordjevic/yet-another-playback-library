@@ -8,12 +8,9 @@ namespace yapl {
 
 media_source::media_source()
     : m_data_source{std::make_shared<data_sources::file_data_source>(
-          "BigBuckBunny.mp4")} {
-    LOG_DEBUG("media_source - constructor");
-}
+          "BigBuckBunny.mp4")} {}
 
 void media_source::open(const std::string_view url) {
-    LOG_DEBUG("media_source - open");
     m_data_source = std::make_shared<data_sources::file_data_source>(url);
     m_data_source->open();
 }
@@ -21,7 +18,6 @@ void media_source::open(const std::string_view url) {
 void media_source::close() { m_data_source->close(); }
 
 size_t media_source::read_packet(size_t size, std::span<uint8_t> buffer) {
-    LOG_DEBUG(" {} bytes from media source", size);
     if (m_data_source->is_open() == false) {
         throw std::runtime_error("Media source is not open");
     }

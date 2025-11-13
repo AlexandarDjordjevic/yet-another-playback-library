@@ -30,7 +30,6 @@ struct video_decoder : public idecoder {
   private:
     AVCodecParameters *m_codecpar;
     AVCodecContext *m_codec_ctx;
-    AVFrame *m_frame;
 };
 
 } // namespace yapl::decoders::ffmpeg

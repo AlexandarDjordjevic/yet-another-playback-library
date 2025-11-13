@@ -1,9 +1,12 @@
 #include "yapl/decoders/ffmpeg/video_decoder.hpp"
 #include "yapl/debug.hpp"
+#include "yapl/media_sample.hpp"
 #include "yapl/track_info.hpp"
 
 #include <cstdio>
+#include <cstring>
 #include <fmt/format.h>
+#include <libavutil/frame.h>
 #include <memory>
 #include <stdexcept>
 #ifdef __cplusplus
@@ -13,14 +16,41 @@ extern "C" {
 #include <libavcodec/codec.h>
 #include <libavcodec/codec_id.h>
 #include <libavcodec/codec_par.h>
+#include <libavutil/pixdesc.h>
 #ifdef __cplusplus
 }
 #endif
 
 namespace yapl::decoders::ffmpeg {
 
+void write_yuv420p_frame(AVFrame *frame, std::shared_ptr<media_sample> sample) {
+    // For YUV420p format
+    if (frame->format == AV_PIX_FMT_YUV420P) {
+        sample->data.resize(frame->width * frame->height * 3 / 2);
+        auto *ptr = sample->data.data();
+        // Write Y plane (luma)
+        for (int y = 0; y < frame->height; y++) {
+            memcpy(ptr, frame->data[0] + y * frame->linesize[0], frame->width);
+            ptr += frame->width;
+        }
+
+        // Write U plane (chroma)
+        for (int y = 0; y < frame->height / 2; y++) {
+            memcpy(ptr, frame->data[1] + y * frame->linesize[1],
+                   frame->width / 2);
+            ptr += frame->width / 2;
+        }
+
+        // Write V plane (chroma)
+        for (int y = 0; y < frame->height / 2; y++) {
+            memcpy(ptr, frame->data[2] + y * frame->linesize[2],
+                   frame->width / 2);
+            ptr += frame->width / 2;
+        }
+    }
+}
+
 video_decoder::video_decoder(AVCodecID codec_id) {
-    LOG_INFO("video_decoder initialized");
     m_codecpar = avcodec_parameters_alloc();
     m_codecpar->codec_id = codec_id;
 
@@ -29,8 +59,6 @@ video_decoder::video_decoder(AVCodecID codec_id) {
         throw std::runtime_error(
             fmt::format("Unsupported codec {}", static_cast<int>(codec_id)));
     }
-
-    LOG_INFO("Codec name {}, long name {}", codec->name, codec->long_name);
 
     m_codec_ctx = avcodec_alloc_context3(codec);
     if (avcodec_parameters_to_context(m_codec_ctx, m_codecpar) < 0) {
@@ -42,66 +70,97 @@ video_decoder::video_decoder(AVCodecID codec_id) {
     if (avcodec_open2(m_codec_ctx, codec, nullptr) < 0) {
         throw std::runtime_error("Could not open codec");
     }
-
-    m_frame = av_frame_alloc();
 }
 
 video_decoder::~video_decoder() {
-    LOG_INFO("video_decoder destroyed");
     avcodec_parameters_free(&m_codecpar);
     avcodec_free_context(&m_codec_ctx);
-    av_frame_free(&m_frame);
 }
 
-bool video_decoder::decode(std::shared_ptr<track_info> info,
+bool video_decoder::decode([[maybe_unused]] std::shared_ptr<track_info> info,
                            std::shared_ptr<media_sample> sample,
                            std::shared_ptr<media_sample> decoded_sample) {
-    // Decode data using FFmpeg
-    LOG_INFO("Decoding data with video_decoder");
-    (void)decoded_sample;
-    (void)sample;
-    (void)info;
+    AVPacket *packet = av_packet_alloc();
 
-    AVPacket packet = {};
-    packet.data = sample->data.data();
-    packet.size = sample->data.size();
+    static FILE *decoder_input = fopen("decoder_input.h264", "wb");
+    static size_t total_decoder_input = 0;
 
-    LOG_DEBUG("Decoding sample - size: {}", packet.size);
+    fwrite(sample->data.data(), 1, sample->data.size(), decoder_input);
+    total_decoder_input += sample->data.size();
 
-    // static size_t sample_id = 0;
+    LOG_INFO("Debug sample id: {}", sample->debug_id);
+    LOG_INFO("Total decoder input in bytes {}", total_decoder_input);
 
-    static FILE *fp = fopen("to_decode_.bin", "wb");
+    // If sample is null, this is a flush request
+    if (sample && sample->data.size() > 0) {
+        packet->data = sample->data.data();
+        packet->size = sample->data.size();
 
-    fwrite(sample->data.data(), sample->data.size(), 1, fp);
+        LOG_DEBUG("Decoding sample - size: {}", packet->size);
 
-    // fclose(fp);
-
-    int ret = avcodec_send_packet(m_codec_ctx, &packet);
-    if (ret < 0) {
-        char buffer[1024]{0};
-        av_strerror(ret, buffer, 1024);
-        printf("send_packet error: %d, %s\n", ret, buffer);
-        return false;
+        int ret = avcodec_send_packet(m_codec_ctx, packet);
+        if (ret < 0) {
+            char buffer[1024]{0};
+            av_strerror(ret, buffer, 1024);
+            LOG_CRITICAL("send_packet error: {}, {}. Sample debug id: {}", ret,
+                         buffer, sample->debug_id);
+            FILE *eof_sample = fopen(
+                fmt::format("samples/after/sample_{}.h264", sample->debug_id)
+                    .c_str(),
+                "wb");
+            fwrite(sample->data.data(), 1, sample->data.size(), eof_sample);
+            fclose(eof_sample);
+            av_packet_free(&packet);
+            return false;
+        }
+    } else {
+        // Send null packet to flush decoder
+        printf("Null packets...\n");
     }
 
+    av_packet_unref(packet);
+    av_packet_free(&packet);
+
+    static size_t frames_decoded = 0;
     while (true) {
-        ret = avcodec_receive_frame(m_codec_ctx, m_frame);
-        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-            break;
-        static size_t frame_id = 0;
-        FILE *fp = fopen(
-            fmt::format("decoded_frames/frame_{}.bin", frame_id++).c_str(),
-            "wb");
+        AVFrame *frame = av_frame_alloc();
+        int ret = avcodec_receive_frame(m_codec_ctx, frame);
+        if (ret == AVERROR(EAGAIN)) {
+            av_frame_free(&frame);
+            break; // Need more input
+        } else if (ret == AVERROR_EOF) {
+            av_frame_free(&frame);
+            break; // End of stream
+        } else if (ret < 0) {
+            av_frame_free(&frame);
+            break; // Error
+        }
 
-        fwrite(m_frame->data, m_frame->width * m_frame->height * 3 / 2, 1, fp);
+        frames_decoded++;
 
-        fclose(fp);
+        // Debug information
+        printf("Decoded frame %zu: %dx%d format=%d (%s) pts=%ld\n",
+               frames_decoded, frame->width, frame->height, frame->format,
+               av_get_pix_fmt_name(static_cast<AVPixelFormat>(frame->format)),
+               frame->pts);
 
-        printf("Decoded frame %dx%d pts=%ld\n", m_frame->width, m_frame->height,
-               m_frame->pts);
+        write_yuv420p_frame(frame, decoded_sample);
+        // [[maybe_unused]] static auto once = [&] {
+        //     LOG_INFO("Decoded sample size {}", decoded_sample->data.size());
+        //     auto *fp = fopen("frame.yuv", "wb");
+        //     fwrite(decoded_sample->data.data(), decoded_sample->data.size(),
+        //     1,
+        //            fp);
+
+        //     fclose(fp);
+        //     exit(-1);
+        //     return true;
+        // }();
+
+        av_frame_free(&frame);
     }
 
-    return true; // Return true if decoding was successful
+    return true;
 }
 
 } // namespace yapl::decoders::ffmpeg

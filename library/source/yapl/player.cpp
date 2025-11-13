@@ -13,10 +13,7 @@ void player::load(const std::string_view url) {
     LOG_DEBUG("{}", to_string(m_media_pipeline.get_media_info()));
 }
 
-void player::play() {
-    LOG_DEBUG("Player -> play");
-    m_media_pipeline.buffer();
-}
+void player::play() { m_media_pipeline.play(); }
 
 void player::pause() {
     // Implementation for pausing media

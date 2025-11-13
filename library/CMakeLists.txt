@@ -6,13 +6,14 @@ set(SOURCE_FILES
     ${CMAKE_CURRENT_LIST_DIR}/source/yapl/media_pipeline.cpp
     ${CMAKE_CURRENT_LIST_DIR}/source/yapl/player.cpp
     ${CMAKE_CURRENT_LIST_DIR}/source/yapl/track.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/source/yapl/renderers/sdl/video_renderer.cpp
 )
 
 set(INCLUDE_FILES 
+    ${CMAKE_CURRENT_LIST_DIR}/include/yapl/renderers/sdl/video_renderer.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/data_sources/file_data_source.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/debug.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/ffmpeg_media_extractor.hpp
-    # ${CMAKE_CURRENT_LIST_DIR}/include/yapl/BlockingQueue.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/decoders/ffmpeg/video_decoder.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/idata_source.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/decoders/idecoder.hpp
@@ -57,6 +58,8 @@ target_include_directories(yapl PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/include
 )
 
+find_package(SDL2 REQUIRED)
+
 target_link_libraries(yapl
     PUBLIC
     spdlog::spdlog
@@ -66,6 +69,7 @@ target_link_libraries(yapl
     ${AVUTIL_LIBRARIES}
     ${SWSCALE_LIBRARIES}
     ${SWRESAMPLE_LIBRARIES}
+    ${SDL2_LIBRARIES}
 )
 
 ## Add FFmpeg include directories and any extra cflags from pkg-config
@@ -75,5 +79,6 @@ target_include_directories(yapl PUBLIC
     ${AVUTIL_INCLUDE_DIRS}
     ${SWSCALE_INCLUDE_DIRS}
     ${SWRESAMPLE_INCLUDE_DIRS}
+    ${SDL2_INCLUDE_DIRS}
 )
 target_compile_options(yapl PUBLIC ${AVFORMAT_CFLAGS_OTHER} ${AVCODEC_CFLAGS_OTHER} ${AVUTIL_CFLAGS_OTHER} ${SWSCALE_CFLAGS_OTHER} ${SWRESAMPLE_CFLAGS_OTHER})

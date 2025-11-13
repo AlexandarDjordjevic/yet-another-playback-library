@@ -6,6 +6,7 @@
 #include "yapl/media_info.hpp"
 #include "yapl/media_pipeline.hpp"
 #include "yapl/media_source.hpp"
+#include "yapl/renderers/sdl/video_renderer.hpp"
 #include "yapl/track.hpp"
 #include "yapl/track_info.hpp"
 
@@ -20,9 +21,8 @@ using namespace std::chrono_literals;
 
 namespace yapl {
 
-static FILE *fp;
-
 media_pipeline::media_pipeline() {
+    m_video_render = std::make_unique<renderers::sdl::video_renderer>(640, 360);
     // TODO: Refactor -> Media pipeline should get a media source factory
     m_media_source = std::make_unique<media_source>();
     if (!m_media_source) {
@@ -36,26 +36,35 @@ media_pipeline::media_pipeline() {
     }
 
     // TODO: Refactor -> media pipeline should get a decoder factory
-
-    // fp = fopen("bufferd_data.bin", "wb");
-
     m_buffering_thread = std::thread([this]() {
-        while (true) {
+        while (!m_eos_reached) {
             if (!m_buffering) {
                 std::unique_lock<std::mutex> lg{m_buffering_mtx};
                 m_buffering_cv.wait(lg);
             }
-            auto sample = m_media_extractor->read_sample();
-            LOG_DEBUG("media_pipeline - Sample read: trackId: {}, pts: {}, dts "
-                      ": {} duration: {}",
-                      sample->track_id, sample->pts, sample->dts,
-                      sample->duration);
+            auto read_sample_output = m_media_extractor->read_sample();
+            switch (read_sample_output.error) {
 
-            m_tracks[sample->track_id]->push_sample(sample);
+            case read_sample_error_t::no_errror: {
+                auto sample = read_sample_output.sample;
+                LOG_DEBUG(
+                    "media_pipeline - Sample read: trackId: {}, pts: {}, dts "
+                    ": {} duration: {}",
+                    sample->track_id, sample->pts, sample->dts,
+                    sample->duration);
 
-            // fwrite(sample->data.data(), 1, sample->data.size(), fp);
+                m_tracks[sample->track_id]->push_sample(sample);
+            } break;
+            case read_sample_error_t::invalid_sample:
+            case read_sample_error_t::invalid_packet_size:
+            case read_sample_error_t::invalid_stream_index:
+                break;
+            case read_sample_error_t::end_of_stream:
+                m_eos_reached = true;
+                break;
+            }
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
         }
     });
 
@@ -75,24 +84,22 @@ media_pipeline::media_pipeline() {
 
             m_video_decoder->decode(m_tracks[sample->track_id]->get_info(),
                                     sample, decoded);
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            // HACK
+            if (decoded->data.size() > 0) {
+                m_video_render->push_frame(decoded);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     });
-
-    LOG_INFO("media_pipeline initialized");
 }
 
 media_pipeline::~media_pipeline() {
     if (m_buffering_thread.joinable()) {
         m_buffering_thread.join();
     }
-    fclose(fp);
-
-    LOG_INFO("media_pipeline destructor called");
 }
 
 void media_pipeline::load(const std::string_view url) {
-    LOG_DEBUG("media_pipeline - loading URL: {}", std::string(url));
     assert(m_media_source);
     assert(m_media_extractor);
 
@@ -113,9 +120,10 @@ void media_pipeline::load(const std::string_view url) {
 }
 
 void media_pipeline::play() {
-    LOG_INFO("media_pipeline playing");
+    LOG_INFO("media_pipeline::play");
     m_buffering = true;
     m_buffering_cv.notify_one();
+    m_video_render->render();
 }
 
 void media_pipeline::pause() { m_buffering = false; }
@@ -125,15 +133,11 @@ void media_pipeline::stop() {
 }
 
 void media_pipeline::buffer() {
-    LOG_INFO("media_pipeline buffering");
     m_buffering = true;
     m_buffering_cv.notify_one();
 }
 
-void media_pipeline::pause_buffering() {
-    LOG_INFO("media_pipeline pause buffering");
-    m_buffering = false;
-}
+void media_pipeline::pause_buffering() { m_buffering = false; }
 
 void media_pipeline::seek([[maybe_unused]] float position) {
     // Implement seek logic

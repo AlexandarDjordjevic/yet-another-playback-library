@@ -4,6 +4,7 @@
 #include "yapl/imedia_extractor.hpp"
 #include "yapl/imedia_source.hpp"
 #include "yapl/media_info.hpp"
+#include "yapl/renderers/ivideo_renderer.hpp"
 #include "yapl/track.hpp"
 
 #include <condition_variable>
@@ -33,13 +34,14 @@ class media_pipeline {
     std::condition_variable m_buffering_cv;
     std::mutex m_buffering_mtx;
     std::thread m_buffering_thread;
-    bool m_buffering{};
+    bool m_buffering{false};
+    bool m_eos_reached{false};
     std::thread m_video_decoder_thread;
     std::shared_ptr<imedia_source> m_media_source;
     std::unique_ptr<imedia_extractor> m_media_extractor;
     std::vector<std::shared_ptr<track>> m_tracks;
-
     std::unique_ptr<decoders::idecoder> m_video_decoder;
+    std::unique_ptr<renderers::ivideo_renderer> m_video_render;
 };
 
 } // namespace yapl
