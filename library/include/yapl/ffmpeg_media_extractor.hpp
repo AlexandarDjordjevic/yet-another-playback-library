@@ -15,6 +15,10 @@ extern "C" {
 namespace yapl {
 
 struct ffmpeg_media_extractor : public imedia_extractor {
+  private:
+    enum class packet_format { unknown, annexb, avcc, raw_nal_payload };
+
+  public:
     ffmpeg_media_extractor(std::shared_ptr<imedia_source> mediaSource);
 
     ~ffmpeg_media_extractor();
@@ -28,8 +32,15 @@ struct ffmpeg_media_extractor : public imedia_extractor {
   private:
     void fetch_media_info();
 
-    void packet_to_annexb(AVPacket &pkt,
-                          std::shared_ptr<media_sample> &sample) const;
+    static packet_format determine_packet_format(size_t nal_size_len,
+                                                 const AVPacket &packet);
+
+    static void packet_to_annexb(size_t nal_size_length,
+                                 std::shared_ptr<media_info> _media_info,
+                                 AVPacket &pkt,
+                                 std::shared_ptr<media_sample> &sample);
+    // void packet_to_annexb(AVPacket &pkt,
+    //                       std::shared_ptr<media_sample> &sample) const;
 
   private:
     std::shared_ptr<imedia_source> m_media_source;

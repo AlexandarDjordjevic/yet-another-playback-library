@@ -5,11 +5,16 @@
 #include "yapl/media_info.hpp"
 #include "yapl/media_sample.hpp"
 #include "yapl/track_info.hpp"
+#include "yapl/utilities.hpp"
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <functional>
 #include <libavcodec/packet.h>
 #include <memory>
+#include <span>
+#include <stdexcept>
 #include <vector>
 
 namespace yapl {
@@ -17,13 +22,8 @@ namespace yapl {
 ffmpeg_media_extractor::ffmpeg_media_extractor(
     std::shared_ptr<imedia_source> _media_source)
     : m_media_source{_media_source}, m_fmt_ctx{nullptr}, m_avio_ctx{nullptr} {
-    // Do not write to a file here - extractor should expose packets and
-    // extradata so callers can persist data into their own format. Previously
-    // this class wrote to test_samples/extractor.bin; that responsibility has
-    // been removed.
 
     avformat_network_init();
-
     auto av_read_packet = [](void *opaque, uint8_t *buf, int buf_size) -> int {
         auto media_source = static_cast<imedia_source *>(opaque);
         auto read = media_source->read_packet(
@@ -141,8 +141,8 @@ enum class nal_unit_type {
     filter_data = 12, // padding
 };
 
-std::string to_string(nal_unit_type nu) {
-    switch (nu) {
+std::string to_string(nal_unit_type frame) {
+    switch (frame) {
     default:
     case nal_unit_type::unspecified:
         return "Unspecified";
@@ -173,18 +173,17 @@ std::string to_string(nal_unit_type nu) {
     }
 }
 
-struct nal_unit {
-    nal_unit(size_t nal_size_len, std::span<uint8_t> unit) {
+struct avcc_frame {
+    avcc_frame(size_t nal_size_len, std::span<uint8_t> raw_data) {
         auto pos = 0;
         for (size_t i = 0; i < nal_size_len; ++i) {
-            size = (size << 8) | unit[pos++];
+            size = (size << 8) | raw_data[pos++];
         }
-        header.value = unit[pos];
-        auto begin = unit.begin() + pos;
-        auto end = unit.begin() + pos + size;
+        header.value = raw_data[pos];
+        auto begin = raw_data.begin() + pos;
+        auto end = raw_data.begin() + pos + size;
         data = {begin, end};
     }
-
     uint32_t size;
     union {
         struct {
@@ -199,6 +198,9 @@ struct nal_unit {
 
 read_sample_result ffmpeg_media_extractor::read_sample() {
     read_sample_result output;
+
+    utilities::raii_cleanup cl{[&] { av_packet_unref(&m_pkt); }};
+
     auto read_frame_result = av_read_frame(m_fmt_ctx, &m_pkt);
     auto stream_id = static_cast<size_t>(m_pkt.stream_index);
     if (read_frame_result < 0) {
@@ -245,71 +247,112 @@ read_sample_result ffmpeg_media_extractor::read_sample() {
     LOG_TRACE("Read sample {}, pts {}, dts {}", sample->debug_id, sample->pts,
               sample->dts);
 
-    packet_to_annexb(m_pkt, sample);
+    packet_to_annexb(
+        m_media_info->tracks[sample->track_id]->extra_data->nal_size_length,
+        get_media_info(), m_pkt, sample);
 
-    av_packet_unref(&m_pkt);
     return {.stream_id = stream_id,
             .error = read_sample_error_t::no_errror,
             .sample = sample};
 }
 
-static bool looks_like_annexb(const uint8_t *data, size_t size) {
-    if (!data || size == 0)
-        return false;
+ffmpeg_media_extractor::packet_format
+ffmpeg_media_extractor::determine_packet_format(size_t nal_size_len,
+                                                const AVPacket &pkt) {
+    const uint8_t *data = pkt.data;
+    const size_t size = pkt.size;
 
-    if (size >= 4) {
-        if (data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x00 &&
-            data[3] == 0x01)
-            return true;
+    if (size < 4)
+        return packet_format::raw_nal_payload;
+
+    if (nal_size_len < 1 || nal_size_len > 4) {
+        return packet_format::raw_nal_payload;
     }
-    if (size >= 3) {
-        if (data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x01)
-            return true;
+
+    // annex-b
+    if (nal_size_len == 3 || nal_size_len == 4) {
+        auto annex_b_header = &"\x00\x00\x00\x01"[nal_size_len - 4];
+        if (size >= nal_size_len &&
+            memcmp(data, annex_b_header, nal_size_len) == 0) {
+            return packet_format::annexb;
+        }
     }
-    return false;
+
+    // avcc
+    uint32_t declared = 0;
+    for (size_t i = 0; i < nal_size_len; i++)
+        declared = (declared << 8) | data[i];
+
+    if (declared > 0 && declared <= size - nal_size_len)
+        return packet_format::avcc;
+
+    return packet_format::unknown;
 }
 
 void ffmpeg_media_extractor::packet_to_annexb(
-    AVPacket &pkt, std::shared_ptr<media_sample> &sample) const {
-    if (!sample || looks_like_annexb(pkt.data, pkt.size))
+    size_t nal_size_length, std::shared_ptr<media_info> _media_info,
+    AVPacket &pkt, std::shared_ptr<media_sample> &sample) {
+    const auto fmt = determine_packet_format(nal_size_length, pkt);
+    auto *position = pkt.data;
+    const auto *end = pkt.data + pkt.size;
+
+    static const uint8_t sc4[4] = {0, 0, 0, 1};
+    switch (fmt) {
+    case packet_format::annexb:
+        for (auto x : std::span<uint8_t>{pkt.data, pkt.data + pkt.size}) {
+            std::cout << (int)x << " ";
+        }
+        std::cout << std::endl;
+        throw std::runtime_error(
+            fmt::format("Invalid format {}", static_cast<int>(fmt)));
+        sample->data.assign(pkt.data, pkt.data + pkt.size);
         return;
 
-    auto m_media_info = get_media_info();
-    auto nal_size_length =
-        m_media_info->tracks[pkt.stream_index]->extra_data->nal_size_length;
+    case packet_format::raw_nal_payload:
+        sample->data.insert(sample->data.end(), sc4, sc4 + 4);
+        sample->data.insert(sample->data.end(), pkt.data, pkt.data + pkt.size);
+        return;
 
-    uint8_t *data = pkt.data;
+    case packet_format::avcc:
+        while (position + nal_size_length <= end) {
+            avcc_frame frame{nal_size_length, {position, pkt.data + pkt.size}};
 
-    while (data < (pkt.data + pkt.size)) {
-        nal_unit nu(nal_size_length, {data, pkt.data + pkt.size});
-        if (nu.size == 0 ||
-            nu.header.fields.type == nal_unit_type::unspecified) {
-            LOG_INFO("Nu size {}, type {}", nu.size,
-                     to_string(nu.header.fields.type));
+            if (frame.size == 0 ||
+                frame.header.fields.type == nal_unit_type::unspecified) {
+                LOG_INFO("Nu size {}, type {}", frame.size,
+                         to_string(frame.header.fields.type));
+            }
+            if (frame.header.fields.type == nal_unit_type::end_of_stream) {
+                LOG_INFO("ffmpeg extractor - EOS detected!");
+            }
+
+            LOG_INFO("Frame type {}", to_string(frame.header.fields.type));
+
+            if (frame.header.fields.type == nal_unit_type::idr_slice ||
+                frame.header.fields.type == nal_unit_type::coded_sliece) {
+                auto &sps_data =
+                    _media_info->tracks[pkt.stream_index]->extra_data->sps_data;
+                auto &pps_data =
+                    _media_info->tracks[pkt.stream_index]->extra_data->pps_data;
+                sample->data.insert(sample->data.end(), sc4, sc4 + 4);
+                sample->data.insert(sample->data.end(), sps_data.begin(),
+                                    sps_data.end());
+                sample->data.insert(sample->data.end(), sc4, sc4 + 4);
+                sample->data.insert(sample->data.end(), pps_data.begin(),
+                                    pps_data.end());
+            }
+
+            sample->data.insert(sample->data.end(), sc4, sc4 + 4);
+            sample->data.insert(sample->data.end(), frame.data.begin(),
+                                frame.data.end());
+
+            position += nal_size_length + frame.size;
         }
-        if (nu.header.fields.type == nal_unit_type::end_of_stream) {
-            LOG_INFO("ffmpeg extractor - EOS detected!");
-        }
+        return;
 
-        if (nu.header.fields.type == nal_unit_type::idr_slice ||
-            nu.header.fields.type == nal_unit_type::coded_sliece) {
-            auto &sps_data =
-                m_media_info->tracks[pkt.stream_index]->extra_data->sps_data;
-            auto &pps_data =
-                m_media_info->tracks[pkt.stream_index]->extra_data->pps_data;
-            uint8_t start_code[]{0, 0, 0, 1};
-            sample->data.insert(sample->data.end(), start_code, start_code + 4);
-            sample->data.insert(sample->data.end(), sps_data.begin(),
-                                sps_data.end());
-            sample->data.insert(sample->data.end(), start_code, start_code + 4);
-            sample->data.insert(sample->data.end(), pps_data.begin(),
-                                pps_data.end());
-        }
-
-        uint8_t start_code[]{0, 0, 0, 1};
-        sample->data.insert(sample->data.end(), start_code, start_code + 4);
-        sample->data.insert(sample->data.end(), nu.data.begin(), nu.data.end());
-        data += nal_size_length + nu.size;
+    default:
+        LOG_ERROR("Unknown packet format!");
+        return;
     }
 }
 

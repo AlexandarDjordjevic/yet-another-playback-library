@@ -1,4 +1,4 @@
-set(SOURCE_FILES 
+set(SOURCE_FILES
     ${CMAKE_CURRENT_LIST_DIR}/source/yapl/data_sources/file_data_source.cpp
     ${CMAKE_CURRENT_LIST_DIR}/source/yapl/media_source.cpp
     ${CMAKE_CURRENT_LIST_DIR}/source/yapl/ffmpeg_media_extractor.cpp

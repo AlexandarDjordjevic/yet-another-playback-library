@@ -1,8 +1,5 @@
 #include "yapl/media_source.hpp"
 #include "yapl/data_sources/file_data_source.hpp"
-#include "yapl/debug.hpp"
-
-using namespace std::chrono_literals;
 
 namespace yapl {
 
