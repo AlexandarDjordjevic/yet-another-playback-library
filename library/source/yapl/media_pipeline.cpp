@@ -37,7 +37,7 @@ media_pipeline::media_pipeline() {
 
     // TODO: Refactor -> media pipeline should get a decoder factory
     m_buffering_thread = std::thread([this]() {
-        while (!m_eos_reached) {
+        while (!m_data_source_eos) {
             if (!m_buffering) {
                 std::unique_lock<std::mutex> lg{m_buffering_mtx};
                 m_buffering_cv.wait(lg);
@@ -47,20 +47,23 @@ media_pipeline::media_pipeline() {
 
             case read_sample_error_t::no_errror: {
                 auto sample = read_sample_output.sample;
-                LOG_DEBUG(
-                    "media_pipeline - Sample read: trackId: {}, pts: {}, dts "
-                    ": {} duration: {}",
-                    sample->track_id, sample->pts, sample->dts,
-                    sample->duration);
+                LOG_TRACE("Read sample for track id: {}, pts: {}, dts "
+                          ": {} duration: {}",
+                          sample->track_id, sample->pts, sample->dts,
+                          sample->duration);
 
-                m_tracks[sample->track_id]->push_sample(sample);
+                m_tracks[read_sample_output.stream_id]->push_sample(sample);
             } break;
             case read_sample_error_t::invalid_sample:
             case read_sample_error_t::invalid_packet_size:
             case read_sample_error_t::invalid_stream_index:
+            case read_sample_error_t::timeout:
                 break;
             case read_sample_error_t::end_of_stream:
-                m_eos_reached = true;
+                LOG_INFO("Data source reached EOS");
+                m_data_source_eos = true;
+                m_tracks[read_sample_output.stream_id]
+                    ->set_data_source_reached_eos();
                 break;
             }
 
@@ -69,7 +72,8 @@ media_pipeline::media_pipeline() {
     });
 
     m_video_decoder_thread = std::thread([&]() {
-        while (true) {
+        m_decoder_eos = false;
+        while (!m_decoder_eos) {
             if (m_tracks.size() == 0) {
                 std::this_thread::sleep_for(1s);
                 continue;
@@ -79,15 +83,29 @@ media_pipeline::media_pipeline() {
                     return track->get_info()->type == track_type::video;
                 });
 
-            auto sample = video_track->pop_sample();
-            auto decoded = std::make_shared<media_sample>();
-
-            m_video_decoder->decode(m_tracks[sample->track_id]->get_info(),
-                                    sample, decoded);
-            // HACK
-            if (decoded->data.size() > 0) {
-                m_video_render->push_frame(decoded);
+            auto read_sample_output = video_track->pop_sample();
+            switch (read_sample_output.error) {
+            case read_sample_error_t::no_errror: {
+                auto sample = read_sample_output.sample;
+                auto decoded = std::make_shared<media_sample>();
+                m_video_decoder->decode(m_tracks[sample->track_id]->get_info(),
+                                        sample, decoded);
+                if (decoded->data.size() > 0) {
+                    m_video_render->push_frame(decoded);
+                }
+            } break;
+            case read_sample_error_t::invalid_sample:
+            case read_sample_error_t::invalid_packet_size:
+            case read_sample_error_t::invalid_stream_index:
+            case read_sample_error_t::timeout:
+                break;
+            case read_sample_error_t::end_of_stream:
+                LOG_INFO("All frames are decoded. Stopping decoder!");
+                m_decoder_eos = true;
+                m_video_render->set_decoder_drained();
+                break;
             }
+
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     });
@@ -96,6 +114,9 @@ media_pipeline::media_pipeline() {
 media_pipeline::~media_pipeline() {
     if (m_buffering_thread.joinable()) {
         m_buffering_thread.join();
+    }
+    if (m_video_decoder_thread.joinable()) {
+        m_video_decoder_thread.join();
     }
 }
 

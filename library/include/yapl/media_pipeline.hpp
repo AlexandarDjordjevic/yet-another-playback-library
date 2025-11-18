@@ -35,7 +35,8 @@ class media_pipeline {
     std::mutex m_buffering_mtx;
     std::thread m_buffering_thread;
     bool m_buffering{false};
-    bool m_eos_reached{false};
+    bool m_data_source_eos{false};
+    bool m_decoder_eos{false};
     std::thread m_video_decoder_thread;
     std::shared_ptr<imedia_source> m_media_source;
     std::unique_ptr<imedia_extractor> m_media_extractor;

@@ -54,7 +54,8 @@ void ffmpeg_media_extractor::start() {
     if (avformat_open_input(&m_fmt_ctx, nullptr, nullptr, nullptr) < 0) {
         throw std::runtime_error("Could not open input from buffer");
     }
-    m_media_info = read_media_info();
+    m_media_info = std::make_shared<media_info>();
+    fetch_media_info();
 }
 
 ffmpeg_media_extractor::~ffmpeg_media_extractor() {
@@ -72,15 +73,14 @@ std::shared_ptr<media_info> ffmpeg_media_extractor::get_media_info() const {
     return m_media_info;
 }
 
-std::shared_ptr<media_info> ffmpeg_media_extractor::read_media_info() {
+void ffmpeg_media_extractor::fetch_media_info() {
 
     if (avformat_find_stream_info(m_fmt_ctx, nullptr) < 0) {
         throw std::runtime_error("Could not find stream info");
     }
 
-    media_info _media_info;
-    _media_info.duration = m_fmt_ctx->duration;
-    _media_info.number_of_tracks = m_fmt_ctx->nb_streams;
+    m_media_info->duration = m_fmt_ctx->duration;
+    m_media_info->number_of_tracks = m_fmt_ctx->nb_streams;
 
     for (auto i = 0u; i < m_fmt_ctx->nb_streams; ++i) {
         AVStream *stream = m_fmt_ctx->streams[i];
@@ -99,7 +99,8 @@ std::shared_ptr<media_info> ffmpeg_media_extractor::read_media_info() {
             _track.properties.audio.sample_rate = codecpar->sample_rate;
             _track.properties.audio.channels = codecpar->ch_layout.nb_channels;
             _track.properties.audio.bit_rate = codecpar->bit_rate;
-            _media_info.tracks.push_back(std::make_shared<track_info>(_track));
+            m_media_info->tracks.push_back(
+                std::make_shared<track_info>(_track));
         } break;
         case AVMEDIA_TYPE_VIDEO: {
             _track.type = track_type::video;
@@ -107,13 +108,14 @@ std::shared_ptr<media_info> ffmpeg_media_extractor::read_media_info() {
             _track.properties.video.height = codecpar->height;
             _track.properties.video.frame_rate = av_q2d(stream->avg_frame_rate);
             _track.properties.video.bit_rate = codecpar->bit_rate;
-            _media_info.tracks.push_back(std::make_shared<track_info>(_track));
+            m_media_info->tracks.push_back(
+                std::make_shared<track_info>(_track));
         } break;
         case AVMEDIA_TYPE_SUBTITLE: {
             track_info subtitleTrack;
             subtitleTrack.track_id = i;
             subtitleTrack.type = track_type::subtitle;
-            _media_info.tracks.push_back(
+            m_media_info->tracks.push_back(
                 std::make_shared<track_info>(subtitleTrack));
         } break;
         default:
@@ -121,8 +123,6 @@ std::shared_ptr<media_info> ffmpeg_media_extractor::read_media_info() {
             break;
         }
     }
-
-    return std::make_shared<media_info>(_media_info);
 }
 
 enum class nal_unit_type {
@@ -197,29 +197,39 @@ struct nal_unit {
     std::span<uint8_t> data;
 };
 
-read_frame_result ffmpeg_media_extractor::read_sample() {
-    read_frame_result output;
-    if (auto ret = av_read_frame(m_fmt_ctx, &m_pkt); ret < 0) {
+read_sample_result ffmpeg_media_extractor::read_sample() {
+    read_sample_result output;
+    auto read_frame_result = av_read_frame(m_fmt_ctx, &m_pkt);
+    auto stream_id = static_cast<size_t>(m_pkt.stream_index);
+    if (read_frame_result < 0) {
+
         if (AVERROR_EOF) {
-            LOG_INFO("ffmpeg_media_extractor - EOS Reached");
-            return {.error = read_sample_error_t::end_of_stream, .sample = {}};
+            LOG_INFO("ffmpeg_media_extractor - Track {} reached EOS",
+                     m_pkt.stream_index);
+            return {.stream_id = stream_id,
+                    .error = read_sample_error_t::end_of_stream,
+                    .sample = {}};
         }
 
         char buffer[1024]{0};
-        av_strerror(ret, buffer, 1024);
+        av_strerror(read_frame_result, buffer, 1024);
         LOG_CRITICAL("[FFMPEG Media Extractor] Read frame error: {}.", buffer);
-        return {.error = read_sample_error_t::invalid_sample, .sample = {}};
+        return {.stream_id = stream_id,
+                .error = read_sample_error_t::invalid_sample,
+                .sample = {}};
     }
 
     if (m_pkt.size <= 0) {
         LOG_ERROR("ffmpeg_media_extractor - Invalid packet size <= 0");
-        return {.error = read_sample_error_t::invalid_packet_size,
+        return {.stream_id = stream_id,
+                .error = read_sample_error_t::invalid_packet_size,
                 .sample = {}};
     }
 
     if (static_cast<uint32_t>(m_pkt.stream_index) >= m_fmt_ctx->nb_streams) {
         LOG_ERROR("ffmpeg_media_extractor - Invalid stream index");
-        return {.error = read_sample_error_t::invalid_stream_index,
+        return {.stream_id = stream_id,
+                .error = read_sample_error_t::invalid_stream_index,
                 .sample = {}};
     }
 
@@ -232,13 +242,15 @@ read_frame_result ffmpeg_media_extractor::read_sample() {
     sample->dts = m_pkt.dts;
     sample->duration = m_pkt.duration;
 
-    LOG_DEBUG("Sample debug id {}, pts {}, dts {}", sample->debug_id,
-              sample->pts, sample->dts);
+    LOG_TRACE("Read sample {}, pts {}, dts {}", sample->debug_id, sample->pts,
+              sample->dts);
 
     packet_to_annexb(m_pkt, sample);
 
     av_packet_unref(&m_pkt);
-    return {.error = read_sample_error_t::no_errror, .sample = sample};
+    return {.stream_id = stream_id,
+            .error = read_sample_error_t::no_errror,
+            .sample = sample};
 }
 
 static bool looks_like_annexb(const uint8_t *data, size_t size) {
@@ -262,32 +274,29 @@ void ffmpeg_media_extractor::packet_to_annexb(
     if (!sample || looks_like_annexb(pkt.data, pkt.size))
         return;
 
-    auto _media_info = get_media_info();
+    auto m_media_info = get_media_info();
     auto nal_size_length =
-        _media_info->tracks[pkt.stream_index]->extra_data->nal_size_length;
+        m_media_info->tracks[pkt.stream_index]->extra_data->nal_size_length;
 
     uint8_t *data = pkt.data;
 
     while (data < (pkt.data + pkt.size)) {
         nal_unit nu(nal_size_length, {data, pkt.data + pkt.size});
-        LOG_TRACE("Nal size: {}. Nal type: {}", nu.size,
-                  to_string(nu.header.fields.type));
-
         if (nu.size == 0 ||
             nu.header.fields.type == nal_unit_type::unspecified) {
             LOG_INFO("Nu size {}, type {}", nu.size,
                      to_string(nu.header.fields.type));
         }
         if (nu.header.fields.type == nal_unit_type::end_of_stream) {
-            LOG_INFO(">>>>>>>>>>>EOS<<<<<<<<<");
+            LOG_INFO("ffmpeg extractor - EOS detected!");
         }
 
         if (nu.header.fields.type == nal_unit_type::idr_slice ||
             nu.header.fields.type == nal_unit_type::coded_sliece) {
             auto &sps_data =
-                _media_info->tracks[pkt.stream_index]->extra_data->sps_data;
+                m_media_info->tracks[pkt.stream_index]->extra_data->sps_data;
             auto &pps_data =
-                _media_info->tracks[pkt.stream_index]->extra_data->pps_data;
+                m_media_info->tracks[pkt.stream_index]->extra_data->pps_data;
             uint8_t start_code[]{0, 0, 0, 1};
             sample->data.insert(sample->data.end(), start_code, start_code + 4);
             sample->data.insert(sample->data.end(), sps_data.begin(),

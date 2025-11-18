@@ -10,7 +10,8 @@ using namespace std::chrono_literals;
 namespace yapl::renderers::sdl {
 
 video_renderer::video_renderer(size_t width, size_t height)
-    : m_width{width}, m_height{height} {
+    : m_width{width}, m_height{height}, m_running{false},
+      m_decoder_drained{false} {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         throw("Failed to Initialzie SDL library!");
     }
@@ -38,9 +39,15 @@ video_renderer::~video_renderer() {
 
 void video_renderer::push_frame(std::shared_ptr<media_sample> frame) {
     std::scoped_lock<std::mutex> lock{m_frames_mtx};
-    LOG_INFO("Renderer push frame. Frame size: {}", frame->data.size());
+    LOG_TRACE(
+        "Renderer push frame. Frame size: {}, frame duration {}, frame pts {} ",
+        frame->data.size(), frame->duration, frame->pts);
     m_frames.insert({frame->pts, frame});
 }
+
+void video_renderer::stop() { m_running = false; }
+
+void video_renderer::set_decoder_drained() { m_decoder_drained = true; }
 
 void video_renderer::render() {
     m_running = true;
@@ -59,6 +66,7 @@ void video_renderer::render() {
 
         std::this_thread::sleep_for(30ms);
         if (m_frames.empty()) {
+            m_running = !m_decoder_drained;
             continue;
         }
 

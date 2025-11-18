@@ -81,22 +81,13 @@ bool video_decoder::decode([[maybe_unused]] std::shared_ptr<track_info> info,
                            std::shared_ptr<media_sample> sample,
                            std::shared_ptr<media_sample> decoded_sample) {
     AVPacket *packet = av_packet_alloc();
-
-    static FILE *decoder_input = fopen("decoder_input.h264", "wb");
-    static size_t total_decoder_input = 0;
-
-    fwrite(sample->data.data(), 1, sample->data.size(), decoder_input);
-    total_decoder_input += sample->data.size();
-
-    LOG_INFO("Debug sample id: {}", sample->debug_id);
-    LOG_INFO("Total decoder input in bytes {}", total_decoder_input);
-
     // If sample is null, this is a flush request
     if (sample && sample->data.size() > 0) {
         packet->data = sample->data.data();
         packet->size = sample->data.size();
 
-        LOG_DEBUG("Decoding sample - size: {}", packet->size);
+        LOG_TRACE("Decoding sample - size: {}, pts {}, dts {}", packet->size,
+                  packet->pts, packet->dts);
 
         int ret = avcodec_send_packet(m_codec_ctx, packet);
         if (ret < 0) {
@@ -121,7 +112,6 @@ bool video_decoder::decode([[maybe_unused]] std::shared_ptr<track_info> info,
     av_packet_unref(packet);
     av_packet_free(&packet);
 
-    static size_t frames_decoded = 0;
     while (true) {
         AVFrame *frame = av_frame_alloc();
         int ret = avcodec_receive_frame(m_codec_ctx, frame);
@@ -136,27 +126,7 @@ bool video_decoder::decode([[maybe_unused]] std::shared_ptr<track_info> info,
             break; // Error
         }
 
-        frames_decoded++;
-
-        // Debug information
-        printf("Decoded frame %zu: %dx%d format=%d (%s) pts=%ld\n",
-               frames_decoded, frame->width, frame->height, frame->format,
-               av_get_pix_fmt_name(static_cast<AVPixelFormat>(frame->format)),
-               frame->pts);
-
         write_yuv420p_frame(frame, decoded_sample);
-        // [[maybe_unused]] static auto once = [&] {
-        //     LOG_INFO("Decoded sample size {}", decoded_sample->data.size());
-        //     auto *fp = fopen("frame.yuv", "wb");
-        //     fwrite(decoded_sample->data.data(), decoded_sample->data.size(),
-        //     1,
-        //            fp);
-
-        //     fclose(fp);
-        //     exit(-1);
-        //     return true;
-        // }();
-
         av_frame_free(&frame);
     }
 

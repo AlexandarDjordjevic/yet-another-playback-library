@@ -5,7 +5,6 @@
 #include "yapl/media_info.hpp"
 #include "yapl/media_sample.hpp"
 #include <memory>
-#include <optional>
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -24,10 +23,10 @@ struct ffmpeg_media_extractor : public imedia_extractor {
 
     std::shared_ptr<media_info> get_media_info() const override;
 
-    read_frame_result read_sample() override;
+    read_sample_result read_sample() override;
 
   private:
-    std::shared_ptr<media_info> read_media_info();
+    void fetch_media_info();
 
     void packet_to_annexb(AVPacket &pkt,
                           std::shared_ptr<media_sample> &sample) const;

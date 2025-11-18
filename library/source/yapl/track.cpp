@@ -7,17 +7,19 @@
 
 namespace yapl {
 
+namespace {
+constexpr auto sample_read_timeout_ms = 20ms;
+}
+
 track::track(const std::shared_ptr<track_info> info)
-    : m_track_info{info}, m_buffered_duration{0},
-      m_sample_queue{blocking_queue<std::shared_ptr<media_sample>>(1024)} {}
+    : m_track_info{info}, m_data_source_eos_reached{false},
+      m_buffered_duration{0},
+      m_sample_queue{data_queue<std::shared_ptr<media_sample>>(1024)} {}
 
 void track::push_sample(const std::shared_ptr<media_sample> sample) {
-    // Process the sample
-    // For example, you can store it in a buffer or send it to a decoder
-    // For now, we will just print the sample information
     m_buffered_duration += sample->duration;
 
-    LOG_DEBUG("track - Sample pushed: trackId: {}, pts: {}, dts: {}, duration: "
+    LOG_TRACE("track - Sample pushed: trackId: {}, pts: {}, dts: {}, duration: "
               "{}, buffered duration: {}",
               sample->track_id, sample->pts, sample->dts, sample->duration,
               m_buffered_duration);
@@ -25,10 +27,27 @@ void track::push_sample(const std::shared_ptr<media_sample> sample) {
     m_sample_queue.push(sample);
 }
 
+void track::set_data_source_reached_eos() { m_data_source_eos_reached = true; }
+
 std::shared_ptr<track_info> track::get_info() const { return m_track_info; }
 
-std::shared_ptr<media_sample> track::pop_sample() {
-    return m_sample_queue.pop();
+read_sample_result track::pop_sample() {
+    if (m_sample_queue.is_empty() && m_data_source_eos_reached) {
+        return {.stream_id = m_track_info->track_id,
+                .error = read_sample_error_t::end_of_stream,
+                .sample{}};
+    }
+
+    auto pop_result = m_sample_queue.pop(sample_read_timeout_ms);
+    if (pop_result.result ==
+        data_queue<std::shared_ptr<media_sample>>::pop_result::timeout) {
+        return {.stream_id = m_track_info->track_id,
+                .error = read_sample_error_t::timeout,
+                .sample{}};
+    }
+    return {.stream_id = m_track_info->track_id,
+            .error = read_sample_error_t::no_errror,
+            .sample = pop_result.data};
 }
 
 } // namespace yapl
