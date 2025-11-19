@@ -11,8 +11,7 @@ class logger {
   public:
     static std::shared_ptr<spdlog::logger> &get() {
         static auto instance = [] {
-            spdlog::set_pattern(
-                "[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%s:%# %!] %v");
+            spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e][%s:%# %!] %v");
 
             std::vector<spdlog::sink_ptr> sinks;
             sinks.push_back(

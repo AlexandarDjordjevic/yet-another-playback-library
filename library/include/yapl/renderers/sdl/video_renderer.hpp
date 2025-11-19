@@ -1,11 +1,11 @@
 #pragma once
 
+#include "yapl/blocking_queue.hpp"
 #include "yapl/renderers/ivideo_renderer.hpp"
 
 #include <SDL2/SDL.h>
 #include <atomic>
 #include <cstddef>
-#include <map>
 #include <thread>
 
 namespace yapl::renderers::sdl {
@@ -21,8 +21,7 @@ struct video_renderer : ivideo_renderer {
   private:
     size_t m_width;
     size_t m_height;
-    std::map<int64_t, std::shared_ptr<media_sample>> m_frames;
-    std::mutex m_frames_mtx;
+    data_queue<std::shared_ptr<media_sample>> m_frames{1024};
     std::atomic_bool m_running;
     std::atomic_bool m_decoder_drained;
     std::thread m_worker_thread;

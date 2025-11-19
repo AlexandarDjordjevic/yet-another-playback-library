@@ -244,9 +244,6 @@ read_sample_result ffmpeg_media_extractor::read_sample() {
     sample->dts = m_pkt.dts;
     sample->duration = m_pkt.duration;
 
-    LOG_TRACE("Read sample {}, pts {}, dts {}", sample->debug_id, sample->pts,
-              sample->dts);
-
     packet_to_annexb(
         m_media_info->tracks[sample->track_id]->extra_data->nal_size_length,
         get_media_info(), m_pkt, sample);
@@ -265,7 +262,7 @@ ffmpeg_media_extractor::determine_packet_format(size_t nal_size_len,
     if (size < 4)
         return packet_format::raw_nal_payload;
 
-    if (nal_size_len < 1 || nal_size_len > 4) {
+    if (nal_size_len <= 1) {
         return packet_format::raw_nal_payload;
     }
 
@@ -325,8 +322,6 @@ void ffmpeg_media_extractor::packet_to_annexb(
             if (frame.header.fields.type == nal_unit_type::end_of_stream) {
                 LOG_INFO("ffmpeg extractor - EOS detected!");
             }
-
-            LOG_INFO("Frame type {}", to_string(frame.header.fields.type));
 
             if (frame.header.fields.type == nal_unit_type::idr_slice ||
                 frame.header.fields.type == nal_unit_type::coded_sliece) {

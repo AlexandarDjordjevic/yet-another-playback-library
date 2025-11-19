@@ -2,6 +2,7 @@
 #include "yapl/debug.hpp"
 #include "yapl/media_sample.hpp"
 #include "yapl/track_info.hpp"
+#include "yapl/utilities.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -81,13 +82,18 @@ bool video_decoder::decode([[maybe_unused]] std::shared_ptr<track_info> info,
                            std::shared_ptr<media_sample> sample,
                            std::shared_ptr<media_sample> decoded_sample) {
     AVPacket *packet = av_packet_alloc();
+    AVFrame *frame = av_frame_alloc();
+
+    utilities::raii_cleanup clean{[&] {
+        av_packet_unref(packet);
+        av_packet_free(&packet);
+        av_frame_free(&frame);
+    }};
+
     // If sample is null, this is a flush request
     if (sample && sample->data.size() > 0) {
         packet->data = sample->data.data();
         packet->size = sample->data.size();
-
-        LOG_TRACE("Decoding sample - size: {}, pts {}, dts {}", packet->size,
-                  packet->pts, packet->dts);
 
         int ret = avcodec_send_packet(m_codec_ctx, packet);
         if (ret < 0) {
@@ -95,12 +101,6 @@ bool video_decoder::decode([[maybe_unused]] std::shared_ptr<track_info> info,
             av_strerror(ret, buffer, 1024);
             LOG_CRITICAL("send_packet error: {}, {}. Sample debug id: {}", ret,
                          buffer, sample->debug_id);
-            FILE *eof_sample = fopen(
-                fmt::format("samples/after/sample_{}.h264", sample->debug_id)
-                    .c_str(),
-                "wb");
-            fwrite(sample->data.data(), 1, sample->data.size(), eof_sample);
-            fclose(eof_sample);
             av_packet_free(&packet);
             return false;
         }
@@ -109,25 +109,20 @@ bool video_decoder::decode([[maybe_unused]] std::shared_ptr<track_info> info,
         printf("Null packets...\n");
     }
 
-    av_packet_unref(packet);
-    av_packet_free(&packet);
-
     while (true) {
-        AVFrame *frame = av_frame_alloc();
         int ret = avcodec_receive_frame(m_codec_ctx, frame);
         if (ret == AVERROR(EAGAIN)) {
-            av_frame_free(&frame);
             break; // Need more input
         } else if (ret == AVERROR_EOF) {
-            av_frame_free(&frame);
             break; // End of stream
         } else if (ret < 0) {
-            av_frame_free(&frame);
-            break; // Error
+            char buffer[1024]{0};
+            av_strerror(ret, buffer, 1024);
+            LOG_ERROR("Decode error {}", buffer);
+            return false;
         }
 
         write_yuv420p_frame(frame, decoded_sample);
-        av_frame_free(&frame);
     }
 
     return true;

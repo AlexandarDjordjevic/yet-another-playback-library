@@ -22,7 +22,6 @@ using namespace std::chrono_literals;
 namespace yapl {
 
 media_pipeline::media_pipeline() {
-    m_video_render = std::make_unique<renderers::sdl::video_renderer>(640, 360);
     // TODO: Refactor -> Media pipeline should get a media source factory
     m_media_source = std::make_unique<media_source>();
     if (!m_media_source) {
@@ -36,7 +35,9 @@ media_pipeline::media_pipeline() {
     }
 
     // TODO: Refactor -> media pipeline should get a decoder factory
-    m_buffering_thread = std::thread([this]() {
+    m_buffering_thread = std::thread([&]() {
+        pthread_setname_np(pthread_self(), "buffering_thread");
+        LOG_INFO("Buffering thread id {}", gettid());
         while (!m_data_source_eos) {
             if (!m_buffering) {
                 std::unique_lock<std::mutex> lg{m_buffering_mtx};
@@ -44,20 +45,17 @@ media_pipeline::media_pipeline() {
             }
             auto read_sample_output = m_media_extractor->read_sample();
             switch (read_sample_output.error) {
-
             case read_sample_error_t::no_errror: {
                 auto sample = read_sample_output.sample;
-                LOG_TRACE("Read sample for track id: {}, pts: {}, dts "
-                          ": {} duration: {}",
-                          sample->track_id, sample->pts, sample->dts,
-                          sample->duration);
-
-                m_tracks[read_sample_output.stream_id]->push_sample(sample);
+                if (read_sample_output.stream_id == 1) {
+                    m_tracks[read_sample_output.stream_id]->push_sample(sample);
+                }
             } break;
             case read_sample_error_t::invalid_sample:
             case read_sample_error_t::invalid_packet_size:
             case read_sample_error_t::invalid_stream_index:
             case read_sample_error_t::timeout:
+                LOG_ERROR("Extractor read sample failed!");
                 break;
             case read_sample_error_t::end_of_stream:
                 LOG_INFO("Data source reached EOS");
@@ -67,18 +65,20 @@ media_pipeline::media_pipeline() {
                 break;
             }
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
     });
 
     m_video_decoder_thread = std::thread([&]() {
         m_decoder_eos = false;
+        pthread_setname_np(pthread_self(), "decoder_thread");
         while (!m_decoder_eos) {
             if (m_tracks.size() == 0) {
                 std::this_thread::sleep_for(1s);
                 continue;
             }
-            auto video_track = *std::ranges::find_if(
+
+            static auto video_track = *std::ranges::find_if(
                 m_tracks, [](const std::shared_ptr<track> &track) {
                     return track->get_info()->type == track_type::video;
                 });
@@ -98,6 +98,7 @@ media_pipeline::media_pipeline() {
             case read_sample_error_t::invalid_packet_size:
             case read_sample_error_t::invalid_stream_index:
             case read_sample_error_t::timeout:
+                LOG_ERROR("Pop sample failed!");
                 break;
             case read_sample_error_t::end_of_stream:
                 LOG_INFO("All frames are decoded. Stopping decoder!");
@@ -106,7 +107,7 @@ media_pipeline::media_pipeline() {
                 break;
             }
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
     });
 }
@@ -127,6 +128,14 @@ void media_pipeline::load(const std::string_view url) {
     m_media_source->open(url);
     m_media_extractor->start();
     auto _media_info = m_media_extractor->get_media_info();
+    auto _video_track =
+        *std::ranges::find_if(_media_info->tracks, [](const auto &track) {
+            return track->type == track_type::video;
+        });
+
+    m_video_render = std::make_unique<renderers::sdl::video_renderer>(
+        _video_track->properties.video.width,
+        _video_track->properties.video.height);
     for (const auto &_track_info : _media_info->tracks) {
         LOG_DEBUG("media_pipeline - Track ID: {}, Type: {}",
                   _track_info->track_id, static_cast<int>(_track_info->type));

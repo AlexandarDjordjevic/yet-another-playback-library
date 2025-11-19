@@ -1,9 +1,7 @@
 #include "yapl/renderers/sdl/video_renderer.hpp"
 #include "SDL_render.h"
-#include "yapl/debug.hpp"
 #include <cstdio>
 #include <cstdlib>
-#include <mutex>
 
 using namespace std::chrono_literals;
 
@@ -38,11 +36,7 @@ video_renderer::~video_renderer() {
 }
 
 void video_renderer::push_frame(std::shared_ptr<media_sample> frame) {
-    std::scoped_lock<std::mutex> lock{m_frames_mtx};
-    LOG_TRACE(
-        "Renderer push frame. Frame size: {}, frame duration {}, frame pts {} ",
-        frame->data.size(), frame->duration, frame->pts);
-    m_frames.insert({frame->pts, frame});
+    m_frames.push(frame);
 }
 
 void video_renderer::stop() { m_running = false; }
@@ -59,33 +53,29 @@ void video_renderer::render() {
 
     while (m_running) {
         while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT)
+            if (event.type == SDL_QUIT) {
                 m_running = false;
+                exit(EXIT_SUCCESS);
+            }
         }
         SDL_Delay(30);
 
-        std::this_thread::sleep_for(30ms);
-        if (m_frames.empty()) {
+        if (m_frames.is_empty()) {
             m_running = !m_decoder_drained;
             continue;
         }
 
-        {
-            std::scoped_lock<std::mutex> lock{m_frames_mtx};
-            // Pointers to Y, U, V planes
-
-            uint8_t *y_plane = m_frames.begin()->second->data.data();
-            uint8_t *u_plane = y_plane + m_width * m_height;
-            uint8_t *v_plane = u_plane + (m_width * m_height) / 4;
-            // Update texture with YUV data
-            SDL_UpdateYUVTexture(m_texture, nullptr, y_plane, y_pitch, u_plane,
-                                 u_pitch, v_plane, v_pitch);
-            SDL_RenderClear(m_renderer);
-            SDL_RenderCopy(m_renderer, m_texture, nullptr, nullptr);
-            SDL_RenderPresent(m_renderer);
-
-            m_frames.erase(m_frames.begin());
-        }
+        // Pointers to Y, U, V planes
+        auto result = m_frames.pop();
+        uint8_t *y_plane = result->data.data();
+        uint8_t *u_plane = y_plane + m_width * m_height;
+        uint8_t *v_plane = u_plane + (m_width * m_height) / 4;
+        // Update texture with YUV data
+        SDL_UpdateYUVTexture(m_texture, nullptr, y_plane, y_pitch, u_plane,
+                             u_pitch, v_plane, v_pitch);
+        SDL_RenderClear(m_renderer);
+        SDL_RenderCopy(m_renderer, m_texture, nullptr, nullptr);
+        SDL_RenderPresent(m_renderer);
     }
 }
 

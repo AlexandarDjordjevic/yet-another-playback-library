@@ -7,6 +7,7 @@
 #include "yapl/renderers/ivideo_renderer.hpp"
 #include "yapl/track.hpp"
 
+#include <atomic>
 #include <condition_variable>
 #include <functional>
 #include <thread>
@@ -34,9 +35,9 @@ class media_pipeline {
     std::condition_variable m_buffering_cv;
     std::mutex m_buffering_mtx;
     std::thread m_buffering_thread;
-    bool m_buffering{false};
-    bool m_data_source_eos{false};
-    bool m_decoder_eos{false};
+    std::atomic_bool m_buffering{false};
+    std::atomic_bool m_data_source_eos{false};
+    std::atomic_bool m_decoder_eos{false};
     std::thread m_video_decoder_thread;
     std::shared_ptr<imedia_source> m_media_source;
     std::unique_ptr<imedia_extractor> m_media_extractor;

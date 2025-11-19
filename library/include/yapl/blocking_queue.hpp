@@ -2,11 +2,10 @@
 
 #include <chrono>
 #include <condition_variable>
-#include <cstring>
 #include <mutex>
+#include <optional>
+#include <stdexcept>
 #include <vector>
-
-using namespace std::chrono_literals;
 
 namespace yapl {
 
@@ -16,64 +15,105 @@ template <typename T> class data_queue {
 
     struct pop_output {
         pop_result result;
-        T data;
+        std::optional<T> data;
     };
 
-  public:
-    /**
-     * @brief Constructs a blocking_queue with the specified size.
-     *
-     * @param size The number of items the queue can hold.
-     */
-    data_queue(size_t size) : m_size(size), m_head(0), m_tail(0) {
-        m_pool.resize(size);
+    explicit data_queue(size_t capacity)
+        : m_capacity(capacity), m_head(0), m_tail(0), m_count(0) {
+        if (capacity == 0)
+            throw std::invalid_argument("data_queue requires capacity >= 1");
+        m_pool.resize(capacity);
     }
 
     void push(const T &item) {
         std::unique_lock<std::mutex> lock(m_mutex);
-        m_write_cv.wait(lock,
-                        [this] { return (m_head + 1) % m_size != m_tail; });
-        m_pool[m_head] = item;
-        m_head = (m_head + 1) % m_size;
-        lock.unlock();
-        m_read_cv.notify_one();
+        m_not_full.wait(lock, [this] { return m_count < m_capacity; });
+
+        m_pool[m_tail] = item;
+        m_tail = (m_tail + 1) % m_capacity;
+        ++m_count;
+
+        m_not_empty.notify_one();
     }
 
     T pop() {
         std::unique_lock<std::mutex> lock(m_mutex);
-        m_read_cv.wait(lock, [this] { return !is_empty(); });
-        T item = m_pool[m_tail];
-        m_tail = (m_tail + 1) % m_size;
-        lock.unlock();
-        m_write_cv.notify_one();
+        m_not_empty.wait(lock, [this] { return m_count > 0; });
+
+        T item = std::move(m_pool[m_head]);
+        m_head = (m_head + 1) % m_capacity;
+        --m_count;
+
+        m_not_full.notify_one();
         return item;
     }
 
     pop_output pop(std::chrono::milliseconds timeout_ms) {
         std::unique_lock<std::mutex> lock(m_mutex);
-        auto success = m_read_cv.wait_for(lock, timeout_ms,
-                                          [this] { return !is_empty(); });
+        bool success = m_not_empty.wait_for(lock, timeout_ms,
+                                            [this] { return m_count > 0; });
         if (!success) {
-            return {.result = pop_result::timeout, .data = {}};
+            return {.result = pop_result::timeout, .data = std::nullopt};
         }
 
-        T item = m_pool[m_tail];
-        m_tail = (m_tail + 1) % m_size;
-        lock.unlock();
-        m_write_cv.notify_one();
-        return {.result = pop_result::no_error, .data = item};
+        T item = std::move(m_pool[m_head]);
+        m_head = (m_head + 1) % m_capacity;
+        --m_count;
+
+        m_not_full.notify_one();
+        return {.result = pop_result::no_error,
+                .data = std::make_optional(std::move(item))};
     }
 
-    inline bool is_empty() { return m_tail == m_head; }
+    std::optional<T> try_pop() {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_count == 0)
+            return std::nullopt;
+        T item = std::move(m_pool[m_head]);
+        m_head = (m_head + 1) % m_capacity;
+        --m_count;
+        m_not_full.notify_one();
+        return item;
+    }
+
+    bool try_push(const T &item) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_count == m_capacity)
+            return false;
+        m_pool[m_tail] = item;
+        m_tail = (m_tail + 1) % m_capacity;
+        ++m_count;
+        m_not_empty.notify_one();
+        return true;
+    }
+
+    size_t size() {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_count;
+    }
+
+    size_t capacity() const noexcept { return m_capacity; }
+
+    bool is_empty() {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_count == 0;
+    }
+
+    bool is_full() {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_count == m_capacity;
+    }
 
   private:
     std::vector<T> m_pool;
-    size_t m_size;
+    const size_t m_capacity;
     size_t m_head;
     size_t m_tail;
+    size_t m_count;
+
     std::mutex m_mutex;
-    std::condition_variable m_read_cv;
-    std::condition_variable m_write_cv;
+    std::condition_variable m_not_empty;
+    std::condition_variable m_not_full;
 };
 
 } // namespace yapl
