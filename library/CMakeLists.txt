@@ -9,7 +9,7 @@ set(SOURCE_FILES
     ${CMAKE_CURRENT_LIST_DIR}/source/yapl/renderers/sdl/video_renderer.cpp
 )
 
-set(INCLUDE_FILES 
+set(HEADER_FILES 
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/renderers/sdl/video_renderer.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/data_sources/file_data_source.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/debug.hpp
@@ -32,53 +32,110 @@ set(INCLUDE_FILES
 # Find external dependencies
 find_package(spdlog REQUIRED)
 find_package(fmt REQUIRED)
-find_package(PkgConfig REQUIRED)
-
-# Find individual FFmpeg libraries (create one imported target per module)
-# Find individual FFmpeg libraries via pkg-config and collect flags
-# Use pkg_check_modules to populate <NAME>_LIBRARIES and <NAME>_INCLUDE_DIRS
-pkg_check_modules(AVFORMAT REQUIRED libavformat)
-pkg_check_modules(AVCODEC REQUIRED libavcodec)
-pkg_check_modules(AVUTIL REQUIRED libavutil)
-pkg_check_modules(SWSCALE REQUIRED libswscale)
-pkg_check_modules(SWRESAMPLE REQUIRED libswresample)
-
-message(STATUS "AVCODEC_LIBRARIES=${AVCODEC_LIBRARIES}")
-message(STATUS "AVFORMAT_LIBRARIES=${AVFORMAT_LIBRARIES}")
-message(STATUS "AVUTIL_LIBRARIES=${AVUTIL_LIBRARIES}")
-message(STATUS "SWSCALE_LIBRARIES=${SWSCALE_LIBRARIES}")
-message(STATUS "SWRESAMPLE_LIBRARIES=${SWRESAMPLE_LIBRARIES}")
-
-# Create the shared library
-add_library(yapl SHARED ${SOURCE_FILES} ${INCLUDE_FILES})
-
-message(INFO "CMAKE_CURRENT_LIST_DIR ${CMAKE_CURRENT_LIST_DIR}")
-# Include headers
-target_include_directories(yapl PUBLIC
-    ${CMAKE_CURRENT_LIST_DIR}/include
-)
-
 find_package(SDL2 REQUIRED)
 
-target_link_libraries(yapl
-    PUBLIC
-    spdlog::spdlog
-    fmt::fmt
-    ${AVCODEC_LIBRARIES}
-    ${AVFORMAT_LIBRARIES}
-    ${AVUTIL_LIBRARIES}
-    ${SWSCALE_LIBRARIES}
-    ${SWRESAMPLE_LIBRARIES}
-    ${SDL2_LIBRARIES}
+# Platform-specific FFmpeg handling
+if(WIN32)
+    message(STATUS "Windows: Using vcpkg for FFmpeg")
+    
+    # Try to find FFmpeg components
+    find_path(FFMPEG_INCLUDE_DIR
+        NAMES libavcodec/avcodec.h
+        PATHS ${VCPKG_INSTALLED_DIR}/x64-windows/include
+        NO_DEFAULT_PATH
+    )
+    
+    find_library(AVCODEC_LIB avcodec
+        PATHS ${VCPKG_INSTALLED_DIR}/x64-windows/lib
+        NO_DEFAULT_PATH
+    )
+    
+    find_library(AVFORMAT_LIB avformat
+        PATHS ${VCPKG_INSTALLED_DIR}/x64-windows/lib
+        NO_DEFAULT_PATH
+    )
+    
+    find_library(AVUTIL_LIB avutil
+        PATHS ${VCPKG_INSTALLED_DIR}/x64-windows/lib
+        NO_DEFAULT_PATH
+    )
+    
+    find_library(SWSCALE_LIB swscale
+        PATHS ${VCPKG_INSTALLED_DIR}/x64-windows/lib
+        NO_DEFAULT_PATH
+    )
+    
+    find_library(SWRESAMPLE_LIB swresample
+        PATHS ${VCPKG_INSTALLED_DIR}/x64-windows/lib
+        NO_DEFAULT_PATH
+    )
+    
+    set(FFMPEG_LIBRARIES 
+        ${AVCODEC_LIB}
+        ${AVFORMAT_LIB} 
+        ${AVUTIL_LIB}
+        ${SWSCALE_LIB}
+        ${SWRESAMPLE_LIB}
+    )
+    
+else()
+    # Linux: Use pkg-config for FFmpeg
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(FFMPEG REQUIRED 
+        libavformat 
+        libavcodec 
+        libavutil 
+        libswscale 
+        libswresample
+    )
+endif()
+
+# Create the shared library - include both source and header files
+add_library(yapl STATIC ${SOURCE_FILES} ${HEADER_FILES})
+
+# Set target properties to make it visible
+set_target_properties(yapl PROPERTIES
+    VERSION ${PROJECT_VERSION}
+    SOVERSION 1
+    PUBLIC_HEADER "${HEADER_FILES}"
 )
 
-## Add FFmpeg include directories and any extra cflags from pkg-config
+# Include headers
 target_include_directories(yapl PUBLIC
-    ${AVFORMAT_INCLUDE_DIRS}
-    ${AVCODEC_INCLUDE_DIRS}
-    ${AVUTIL_INCLUDE_DIRS}
-    ${SWSCALE_INCLUDE_DIRS}
-    ${SWRESAMPLE_INCLUDE_DIRS}
-    ${SDL2_INCLUDE_DIRS}
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
+    $<INSTALL_INTERFACE:include>
 )
-target_compile_options(yapl PUBLIC ${AVFORMAT_CFLAGS_OTHER} ${AVCODEC_CFLAGS_OTHER} ${AVUTIL_CFLAGS_OTHER} ${SWSCALE_CFLAGS_OTHER} ${SWRESAMPLE_CFLAGS_OTHER})
+
+# Common linking for all platforms
+target_link_libraries(yapl PUBLIC
+    spdlog::spdlog
+    fmt::fmt
+    SDL2::SDL2
+)
+
+# Platform-specific FFmpeg linking
+if(WIN32)
+    target_include_directories(yapl PUBLIC ${FFMPEG_INCLUDE_DIR})
+    target_link_libraries(yapl PUBLIC ${FFMPEG_LIBRARIES})
+else()
+    target_link_libraries(yapl PUBLIC ${FFMPEG_LIBRARIES})
+    target_include_directories(yapl PUBLIC ${FFMPEG_INCLUDE_DIRS})
+    target_compile_options(yapl PUBLIC ${FFMPEG_CFLAGS_OTHER})
+endif()
+
+# Set C++ standard
+set_target_properties(yapl PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+)
+
+# Handle Windows-specific settings
+if(WIN32)
+    target_compile_definitions(yapl PRIVATE _CRT_SECURE_NO_WARNINGS)
+    if(MSVC)
+        target_compile_options(yapl PRIVATE /W4)
+    endif()
+endif()
+
+# Export the target so other subdirectories can find it
+export(TARGETS yapl FILE "${CMAKE_CURRENT_BINARY_DIR}/yaplTargets.cmake")

@@ -93,7 +93,7 @@ bool video_decoder::decode([[maybe_unused]] std::shared_ptr<track_info> info,
     // If sample is null, this is a flush request
     if (sample && sample->data.size() > 0) {
         packet->data = sample->data.data();
-        packet->size = sample->data.size();
+        packet->size = static_cast<int>(sample->data.size());
 
         int ret = avcodec_send_packet(m_codec_ctx, packet);
         if (ret < 0) {

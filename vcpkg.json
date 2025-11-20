@@ -1,0 +1,10 @@
+{
+    "name": "yapl",
+    "version-string": "1.0.0",
+    "dependencies": [
+        "spdlog",
+        "ffmpeg",
+        "sdl2",
+        "fmt"
+    ]
+}

@@ -36,8 +36,6 @@ media_pipeline::media_pipeline() {
 
     // TODO: Refactor -> media pipeline should get a decoder factory
     m_buffering_thread = std::thread([&]() {
-        pthread_setname_np(pthread_self(), "buffering_thread");
-        LOG_INFO("Buffering thread id {}", gettid());
         while (!m_data_source_eos) {
             if (!m_buffering) {
                 std::unique_lock<std::mutex> lg{m_buffering_mtx};
@@ -71,7 +69,6 @@ media_pipeline::media_pipeline() {
 
     m_video_decoder_thread = std::thread([&]() {
         m_decoder_eos = false;
-        pthread_setname_np(pthread_self(), "decoder_thread");
         while (!m_decoder_eos) {
             if (m_tracks.size() == 0) {
                 std::this_thread::sleep_for(1s);

@@ -24,8 +24,7 @@ struct stream_extra_data {
         pps_count = data[8 + sps_length];
         pps_length = static_cast<uint16_t>(data[9 + sps_length]) << 8 |
                      data[10 + sps_length];
-        pps_data.assign(&data[11 + sps_length],
-                        &data[11 + sps_length + pps_length]);
+        pps_data.assign(data.begin() + 11 + sps_length, data.end());
     }
 
     uint8_t configuration_version;
@@ -50,7 +49,7 @@ struct audio_info {
 struct video_info {
     size_t width;
     size_t height;
-    size_t frame_rate;
+    double frame_rate;
     size_t bit_rate;
 };
 

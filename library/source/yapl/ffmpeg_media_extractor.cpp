@@ -31,7 +31,7 @@ ffmpeg_media_extractor::ffmpeg_media_extractor(
         if (read == 0) {
             return AVERROR_EOF;
         }
-        return read;
+        return static_cast<int>(read);
     };
 
     m_avio_buffer = static_cast<uint8_t *>(av_malloc(4096));
@@ -74,7 +74,6 @@ std::shared_ptr<media_info> ffmpeg_media_extractor::get_media_info() const {
 }
 
 void ffmpeg_media_extractor::fetch_media_info() {
-
     if (avformat_find_stream_info(m_fmt_ctx, nullptr) < 0) {
         throw std::runtime_error("Could not find stream info");
     }
@@ -86,13 +85,13 @@ void ffmpeg_media_extractor::fetch_media_info() {
         AVStream *stream = m_fmt_ctx->streams[i];
         AVCodecParameters *codecpar = stream->codecpar;
 
+        printf("Codec: %s (%s)\n", avcodec_get_name(codecpar->codec_id),
+            av_get_media_type_string(codecpar->codec_type));
+
         track_info _track{};
         _track.track_id = i;
         _track.codec_id = codecpar->codec_id;
-        _track.extra_data = std::make_shared<stream_extra_data>(
-            std::span<uint8_t>{codecpar->extradata,
-                               codecpar->extradata + codecpar->extradata_size});
-
+        
         switch (codecpar->codec_type) {
         case AVMEDIA_TYPE_AUDIO: {
             _track.type = track_type::audio;
@@ -108,6 +107,10 @@ void ffmpeg_media_extractor::fetch_media_info() {
             _track.properties.video.height = codecpar->height;
             _track.properties.video.frame_rate = av_q2d(stream->avg_frame_rate);
             _track.properties.video.bit_rate = codecpar->bit_rate;
+            _track.extra_data =
+                std::make_shared<stream_extra_data>(std::span<uint8_t>{
+                    codecpar->extradata,
+                    codecpar->extradata + codecpar->extradata_size});
             m_media_info->tracks.push_back(
                 std::make_shared<track_info>(_track));
         } break;
@@ -244,9 +247,10 @@ read_sample_result ffmpeg_media_extractor::read_sample() {
     sample->dts = m_pkt.dts;
     sample->duration = m_pkt.duration;
 
-    packet_to_annexb(
-        m_media_info->tracks[sample->track_id]->extra_data->nal_size_length,
-        get_media_info(), m_pkt, sample);
+    if (sample->track_id == 1)
+        packet_to_annexb(
+            m_media_info->tracks[sample->track_id]->extra_data->nal_size_length,
+            get_media_info(), m_pkt, sample);
 
     return {.stream_id = stream_id,
             .error = read_sample_error_t::no_errror,
@@ -296,12 +300,6 @@ void ffmpeg_media_extractor::packet_to_annexb(
     static const uint8_t sc4[4] = {0, 0, 0, 1};
     switch (fmt) {
     case packet_format::annexb:
-        for (auto x : std::span<uint8_t>{pkt.data, pkt.data + pkt.size}) {
-            std::cout << (int)x << " ";
-        }
-        std::cout << std::endl;
-        throw std::runtime_error(
-            fmt::format("Invalid format {}", static_cast<int>(fmt)));
         sample->data.assign(pkt.data, pkt.data + pkt.size);
         return;
 

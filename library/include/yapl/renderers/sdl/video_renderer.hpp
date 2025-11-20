@@ -21,7 +21,7 @@ struct video_renderer : ivideo_renderer {
   private:
     size_t m_width;
     size_t m_height;
-    data_queue<std::shared_ptr<media_sample>> m_frames{1024};
+    data_queue<std::shared_ptr<media_sample>> m_frames{60};
     std::atomic_bool m_running;
     std::atomic_bool m_decoder_drained;
     std::thread m_worker_thread;

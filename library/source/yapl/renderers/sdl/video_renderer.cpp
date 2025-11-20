@@ -16,7 +16,7 @@ video_renderer::video_renderer(size_t width, size_t height)
 
     m_window =
         SDL_CreateWindow("YAPL", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                         m_width, m_height, SDL_WINDOW_SHOWN);
+                         static_cast<int>(m_width), static_cast<int>(m_height), SDL_WINDOW_SHOWN);
 
     m_renderer = SDL_CreateRenderer(
         m_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
@@ -24,7 +24,7 @@ video_renderer::video_renderer(size_t width, size_t height)
     m_texture =
         SDL_CreateTexture(m_renderer,
                           SDL_PIXELFORMAT_IYUV, // YUV420P
-                          SDL_TEXTUREACCESS_STREAMING, m_width, m_height);
+                          SDL_TEXTUREACCESS_STREAMING,  static_cast<int>(m_width), static_cast<int>(m_height));
 }
 
 video_renderer::~video_renderer() {
@@ -47,9 +47,9 @@ void video_renderer::render() {
     m_running = true;
     SDL_Event event;
 
-    int y_pitch = m_width;
-    int u_pitch = m_width / 2;
-    int v_pitch = m_width / 2;
+    int y_pitch =  static_cast<int>(m_width);
+    int u_pitch =  static_cast<int>(m_width) / 2;
+    int v_pitch =  static_cast<int>(m_width) / 2;
 
     while (m_running) {
         while (SDL_PollEvent(&event)) {
