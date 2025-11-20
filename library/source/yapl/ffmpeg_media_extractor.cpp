@@ -86,12 +86,12 @@ void ffmpeg_media_extractor::fetch_media_info() {
         AVCodecParameters *codecpar = stream->codecpar;
 
         printf("Codec: %s (%s)\n", avcodec_get_name(codecpar->codec_id),
-            av_get_media_type_string(codecpar->codec_type));
+               av_get_media_type_string(codecpar->codec_type));
 
         track_info _track{};
         _track.track_id = i;
         _track.codec_id = codecpar->codec_id;
-        
+
         switch (codecpar->codec_type) {
         case AVMEDIA_TYPE_AUDIO: {
             _track.type = track_type::audio;

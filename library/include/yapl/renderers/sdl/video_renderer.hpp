@@ -1,7 +1,7 @@
 #pragma once
 
 #include "yapl/blocking_queue.hpp"
-#include "yapl/renderers/ivideo_renderer.hpp"
+#include "yapl/renderers/i_video_renderer.hpp"
 
 #include <SDL2/SDL.h>
 #include <atomic>
@@ -10,9 +10,10 @@
 
 namespace yapl::renderers::sdl {
 
-struct video_renderer : ivideo_renderer {
-    video_renderer(size_t, size_t);
+struct video_renderer : i_video_renderer {
+    video_renderer();
     ~video_renderer();
+    void resize(size_t, size_t) override;
     void push_frame(std::shared_ptr<media_sample>) override;
     void stop() override;
     void render() override;

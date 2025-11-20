@@ -6,7 +6,7 @@
 #include "yapl/media_info.hpp"
 #include "yapl/media_pipeline.hpp"
 #include "yapl/media_source.hpp"
-#include "yapl/renderers/sdl/video_renderer.hpp"
+#include "yapl/renderers/i_video_renderer_factory.hpp"
 #include "yapl/track.hpp"
 #include "yapl/track_info.hpp"
 
@@ -21,7 +21,8 @@ using namespace std::chrono_literals;
 
 namespace yapl {
 
-media_pipeline::media_pipeline() {
+media_pipeline::media_pipeline(
+    std::unique_ptr<renderers::i_video_renderer_factory> vrf) {
     // TODO: Refactor -> Media pipeline should get a media source factory
     m_media_source = std::make_unique<media_source>();
     if (!m_media_source) {
@@ -33,6 +34,8 @@ media_pipeline::media_pipeline() {
     if (!m_media_extractor) {
         throw std::runtime_error("Failed to construct media extractor!");
     }
+
+    m_video_render = vrf->create_video_renderer();
 
     // TODO: Refactor -> media pipeline should get a decoder factory
     m_buffering_thread = std::thread([&]() {
@@ -130,9 +133,8 @@ void media_pipeline::load(const std::string_view url) {
             return track->type == track_type::video;
         });
 
-    m_video_render = std::make_unique<renderers::sdl::video_renderer>(
-        _video_track->properties.video.width,
-        _video_track->properties.video.height);
+    m_video_render->resize(_video_track->properties.video.width,
+                           _video_track->properties.video.height);
     for (const auto &_track_info : _media_info->tracks) {
         LOG_DEBUG("media_pipeline - Track ID: {}, Type: {}",
                   _track_info->track_id, static_cast<int>(_track_info->type));

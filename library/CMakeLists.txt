@@ -9,7 +9,9 @@ set(SOURCE_FILES
     ${CMAKE_CURRENT_LIST_DIR}/source/yapl/renderers/sdl/video_renderer.cpp
 )
 
-set(HEADER_FILES 
+set(INCLUDE_FILES 
+    ${CMAKE_CURRENT_LIST_DIR}/include/yapl/renderers/i_video_renderer.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/include/yapl/renderers/i_video_renderer_factory.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/renderers/sdl/video_renderer.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/data_sources/file_data_source.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/debug.hpp

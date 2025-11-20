@@ -1,5 +1,7 @@
 #include "yapl/renderers/sdl/video_renderer.hpp"
+
 #include "SDL_render.h"
+#include "yapl/debug.hpp"
 #include <cstdio>
 #include <cstdlib>
 
@@ -7,24 +9,15 @@ using namespace std::chrono_literals;
 
 namespace yapl::renderers::sdl {
 
-video_renderer::video_renderer(size_t width, size_t height)
-    : m_width{width}, m_height{height}, m_running{false},
-      m_decoder_drained{false} {
+video_renderer::video_renderer()
+    : m_width{640}, m_height{480}, m_running{false}, m_decoder_drained{false} {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         throw("Failed to Initialzie SDL library!");
     }
 
     m_window =
         SDL_CreateWindow("YAPL", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                         static_cast<int>(m_width), static_cast<int>(m_height), SDL_WINDOW_SHOWN);
-
-    m_renderer = SDL_CreateRenderer(
-        m_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-
-    m_texture =
-        SDL_CreateTexture(m_renderer,
-                          SDL_PIXELFORMAT_IYUV, // YUV420P
-                          SDL_TEXTUREACCESS_STREAMING,  static_cast<int>(m_width), static_cast<int>(m_height));
+                         m_width, m_height, SDL_WINDOW_SHOWN);
 }
 
 video_renderer::~video_renderer() {
@@ -35,7 +28,22 @@ video_renderer::~video_renderer() {
     m_worker_thread.join();
 }
 
+void video_renderer::resize(size_t width, size_t height) {
+    m_width = width;
+    m_height = height;
+    LOG_INFO("Resize {}x{}", m_width, m_height);
+    SDL_DestroyWindow(m_window);
+    m_window =
+        SDL_CreateWindow("YAPL", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                         m_width, m_height, SDL_WINDOW_SHOWN);
+    m_texture =
+        SDL_CreateTexture(m_renderer,
+                          SDL_PIXELFORMAT_IYUV, // YUV420P
+                          SDL_TEXTUREACCESS_STREAMING, m_width, m_height);
+}
+
 void video_renderer::push_frame(std::shared_ptr<media_sample> frame) {
+
     m_frames.push(frame);
 }
 
@@ -47,9 +55,9 @@ void video_renderer::render() {
     m_running = true;
     SDL_Event event;
 
-    int y_pitch =  static_cast<int>(m_width);
-    int u_pitch =  static_cast<int>(m_width) / 2;
-    int v_pitch =  static_cast<int>(m_width) / 2;
+    int y_pitch = static_cast<int>(m_width);
+    int u_pitch = static_cast<int>(m_width) / 2;
+    int v_pitch = static_cast<int>(m_width) / 2;
 
     while (m_running) {
         while (SDL_PollEvent(&event)) {

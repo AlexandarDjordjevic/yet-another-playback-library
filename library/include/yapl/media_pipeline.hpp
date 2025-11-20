@@ -4,7 +4,8 @@
 #include "yapl/imedia_extractor.hpp"
 #include "yapl/imedia_source.hpp"
 #include "yapl/media_info.hpp"
-#include "yapl/renderers/ivideo_renderer.hpp"
+#include "yapl/renderers/i_video_renderer.hpp"
+#include "yapl/renderers/i_video_renderer_factory.hpp"
 #include "yapl/track.hpp"
 
 #include <atomic>
@@ -16,7 +17,8 @@ namespace yapl {
 
 class media_pipeline {
   public:
-    media_pipeline();
+    media_pipeline(std::unique_ptr<renderers::i_video_renderer_factory> vrf);
+    media_pipeline() = delete;
     ~media_pipeline();
 
     void load(const std::string_view url);
@@ -43,7 +45,7 @@ class media_pipeline {
     std::unique_ptr<imedia_extractor> m_media_extractor;
     std::vector<std::shared_ptr<track>> m_tracks;
     std::unique_ptr<decoders::idecoder> m_video_decoder;
-    std::unique_ptr<renderers::ivideo_renderer> m_video_render;
+    std::unique_ptr<renderers::i_video_renderer> m_video_render;
 };
 
 } // namespace yapl
