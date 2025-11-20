@@ -12,8 +12,8 @@ namespace yapl {
 
 class player {
   public:
-    player(std::unique_ptr<renderers::i_video_renderer_factory> vrf =
-               std::make_unique<renderers::sdl::video_renderer_factory>());
+    player(std::unique_ptr<renderers::i_video_renderer_factory> vrf);
+    player();
     ~player() = default;
 
     void load(const std::string_view url);

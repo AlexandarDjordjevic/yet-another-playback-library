@@ -11,6 +11,7 @@ struct i_video_renderer {
     virtual void render() = 0;
     virtual void stop() = 0;
     virtual void set_decoder_drained() = 0;
+    virtual ~i_video_renderer() = default;
 };
 
 } // namespace yapl::renderers

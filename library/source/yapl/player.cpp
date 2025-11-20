@@ -13,6 +13,10 @@ player::player(std::unique_ptr<renderers::i_video_renderer_factory> vrf)
     LOG_INFO("player initialized");
 }
 
+player::player() : m_media_pipeline{std::make_unique<media_pipeline>(std::make_unique<renderers::sdl::video_renderer_factory>())}{
+
+}
+
 void player::load(const std::string_view url) {
     LOG_DEBUG("Player -> loading media from URL: {}", std::string(url));
     m_media_pipeline->load(url);

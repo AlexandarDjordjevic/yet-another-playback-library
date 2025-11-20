@@ -92,7 +92,7 @@ else()
     )
 endif()
 
-# Create the shared library - include both source and header files
+# Create the static library - include both source and header files
 add_library(yapl STATIC ${SOURCE_FILES} ${HEADER_FILES})
 
 # Set target properties to make it visible
@@ -139,5 +139,4 @@ if(WIN32)
     endif()
 endif()
 
-# Export the target so other subdirectories can find it
 export(TARGETS yapl FILE "${CMAKE_CURRENT_BINARY_DIR}/yaplTargets.cmake")

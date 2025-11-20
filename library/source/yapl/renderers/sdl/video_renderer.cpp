@@ -12,12 +12,20 @@ namespace yapl::renderers::sdl {
 video_renderer::video_renderer()
     : m_width{640}, m_height{480}, m_running{false}, m_decoder_drained{false} {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
-        throw("Failed to Initialzie SDL library!");
+        throw("Failed to Initialize SDL library!");
     }
 
     m_window =
         SDL_CreateWindow("YAPL", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                         m_width, m_height, SDL_WINDOW_SHOWN);
+            static_cast<int>(m_width), static_cast<int>(m_height), SDL_WINDOW_SHOWN);
+
+    m_renderer = SDL_CreateRenderer(
+        m_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+
+    m_texture =
+        SDL_CreateTexture(m_renderer,
+                          SDL_PIXELFORMAT_IYUV, // YUV420P
+                          SDL_TEXTUREACCESS_STREAMING, static_cast<int>(m_width), static_cast<int>(m_height));
 }
 
 video_renderer::~video_renderer() {
@@ -31,15 +39,23 @@ video_renderer::~video_renderer() {
 void video_renderer::resize(size_t width, size_t height) {
     m_width = width;
     m_height = height;
-    LOG_INFO("Resize {}x{}", m_width, m_height);
+
+    SDL_DestroyTexture(m_texture);
+    SDL_DestroyRenderer(m_renderer);
     SDL_DestroyWindow(m_window);
+
     m_window =
         SDL_CreateWindow("YAPL", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                         m_width, m_height, SDL_WINDOW_SHOWN);
+                         static_cast<int>(m_width), static_cast<int>(m_height), SDL_WINDOW_SHOWN);
+
+    m_renderer = SDL_CreateRenderer(
+        m_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+
     m_texture =
         SDL_CreateTexture(m_renderer,
                           SDL_PIXELFORMAT_IYUV, // YUV420P
-                          SDL_TEXTUREACCESS_STREAMING, m_width, m_height);
+                          SDL_TEXTUREACCESS_STREAMING, static_cast<int>(m_width), static_cast<int>(m_height));
+
 }
 
 void video_renderer::push_frame(std::shared_ptr<media_sample> frame) {
