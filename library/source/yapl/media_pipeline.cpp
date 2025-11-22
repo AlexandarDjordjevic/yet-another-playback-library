@@ -8,6 +8,7 @@
 #include "yapl/media_pipeline.hpp"
 #include "yapl/media_source.hpp"
 #include "yapl/renderers/i_video_renderer_factory.hpp"
+#include "yapl/renderers/sdl/audio_renderer.hpp"
 #include "yapl/track.hpp"
 #include "yapl/track_info.hpp"
 
@@ -56,6 +57,8 @@ media_pipeline::media_pipeline(
     }
 
     m_video_render = vrf->create_video_renderer();
+
+    m_audio_render = std::make_unique<renderers::sdl::audio_renderer>();
 
     // TODO: Refactor -> media pipeline should get a decoder factory
     m_buffering_thread = std::thread([&]() {
@@ -159,7 +162,7 @@ media_pipeline::media_pipeline(
                 m_audio_decoder->decode(m_tracks[sample->track_id]->get_info(),
                                         sample, decoded);
 
-                //     m_video_render->push_frame(decoded);
+                m_audio_render->push_frame(decoded);
             } break;
             case read_sample_error_t::invalid_sample:
             case read_sample_error_t::invalid_packet_size:
@@ -230,7 +233,10 @@ void media_pipeline::play() {
     LOG_INFO("media_pipeline::play");
     m_buffering = true;
     m_buffering_cv.notify_one();
-    m_video_render->render();
+    while (true) {
+        m_video_render->render();
+        m_audio_render->render();
+    }
 }
 
 void media_pipeline::pause() { m_buffering = false; }

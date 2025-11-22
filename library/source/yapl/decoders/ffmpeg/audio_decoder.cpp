@@ -41,10 +41,9 @@ audio_decoder::~audio_decoder() {
     avcodec_free_context(&m_codec_ctx);
 }
 
-bool audio_decoder::decode(
-    [[maybe_unused]] std::shared_ptr<track_info> info,
-    std::shared_ptr<media_sample> sample,
-    [[maybe_unused]] std::shared_ptr<media_sample> decoded_sample) {
+bool audio_decoder::decode([[maybe_unused]] std::shared_ptr<track_info> info,
+                           std::shared_ptr<media_sample> sample,
+                           std::shared_ptr<media_sample> decoded_sample) {
     AVPacket *packet = av_packet_alloc();
     AVFrame *frame = av_frame_alloc();
 
@@ -89,20 +88,23 @@ bool audio_decoder::decode(
 
         if (max_rcvd_frames < ++received_frames) {
             max_rcvd_frames = received_frames;
-            LOG_INFO("Max recevide audio frames: {}", received_frames);
+            LOG_DEBUG("Max recevide audio frames: {}", received_frames);
         }
 
         switch (frame->format) {
         case AV_SAMPLE_FMT_FLTP: {
             decoded_sample->data.resize(frame->ch_layout.nb_channels *
-                                        frame->nb_samples * 4);
+                                        frame->nb_samples * sizeof(float));
             switch (frame->ch_layout.nb_channels) {
             case 2: {
                 float *left = (float *)frame->extended_data[0];
                 float *right = (float *)frame->extended_data[1];
+                float *out =
+                    reinterpret_cast<float *>(decoded_sample->data.data());
+
                 for (int i = 0; i < frame->nb_samples; i++) {
-                    decoded_sample->data[i * 2 + 0] = left[i];
-                    decoded_sample->data[i * 2 + 1] = right[i];
+                    out[i * 2 + 0] = left[i];
+                    out[i * 2 + 1] = right[i];
                 }
             } break;
             default: {

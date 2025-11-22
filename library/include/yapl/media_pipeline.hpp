@@ -4,6 +4,7 @@
 #include "yapl/imedia_extractor.hpp"
 #include "yapl/imedia_source.hpp"
 #include "yapl/media_info.hpp"
+#include "yapl/renderers/i_audio_renderer.hpp"
 #include "yapl/renderers/i_video_renderer.hpp"
 #include "yapl/renderers/i_video_renderer_factory.hpp"
 #include "yapl/track.hpp"
@@ -49,6 +50,7 @@ class media_pipeline {
     std::unique_ptr<decoders::i_decoder> m_video_decoder;
     std::unique_ptr<decoders::i_decoder> m_audio_decoder;
     std::unique_ptr<renderers::i_video_renderer> m_video_render;
+    std::unique_ptr<renderers::i_audio_renderer> m_audio_render;
 };
 
 } // namespace yapl

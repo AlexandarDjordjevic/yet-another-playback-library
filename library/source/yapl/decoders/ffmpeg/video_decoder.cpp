@@ -136,7 +136,7 @@ bool video_decoder::decode([[maybe_unused]] std::shared_ptr<track_info> info,
 
         if (max_rcvd_frames < ++received_frames) {
             max_rcvd_frames = received_frames;
-            LOG_INFO("Max recevide video frames: {}", received_frames);
+            LOG_DEBUG("Max recevide video frames: {}", received_frames);
         }
         write_yuv420p_frame(frame, decoded_sample);
     }

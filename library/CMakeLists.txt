@@ -7,12 +7,14 @@ set(SOURCE_FILES
     ${CMAKE_CURRENT_LIST_DIR}/source/yapl/media_pipeline.cpp
     ${CMAKE_CURRENT_LIST_DIR}/source/yapl/player.cpp
     ${CMAKE_CURRENT_LIST_DIR}/source/yapl/track.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/source/yapl/renderers/sdl/audio_renderer.cpp
     ${CMAKE_CURRENT_LIST_DIR}/source/yapl/renderers/sdl/video_renderer.cpp
 )
 
 set(INCLUDE_FILES 
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/renderers/i_video_renderer.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/renderers/i_video_renderer_factory.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/include/yapl/renderers/sdl/audio_renderer.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/renderers/sdl/video_renderer.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/data_sources/file_data_source.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/debug.hpp
