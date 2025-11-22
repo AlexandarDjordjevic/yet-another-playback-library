@@ -8,7 +8,7 @@ using namespace std::chrono_literals;
 
 namespace yapl {
 
-track::track(const std::shared_ptr<track_info> info)
+track::track(std::shared_ptr<track_info> info)
     : m_track_info{info}, m_data_source_eos_reached{false},
       m_buffered_duration{0},
       m_sample_queue{data_queue<std::shared_ptr<media_sample>>(1024)} {}

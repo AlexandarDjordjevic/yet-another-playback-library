@@ -2,6 +2,7 @@ set(SOURCE_FILES
     ${CMAKE_CURRENT_LIST_DIR}/source/yapl/data_sources/file_data_source.cpp
     ${CMAKE_CURRENT_LIST_DIR}/source/yapl/media_source.cpp
     ${CMAKE_CURRENT_LIST_DIR}/source/yapl/ffmpeg_media_extractor.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/source/yapl/decoders/ffmpeg/audio_decoder.cpp
     ${CMAKE_CURRENT_LIST_DIR}/source/yapl/decoders/ffmpeg/video_decoder.cpp
     ${CMAKE_CURRENT_LIST_DIR}/source/yapl/media_pipeline.cpp
     ${CMAKE_CURRENT_LIST_DIR}/source/yapl/player.cpp
@@ -16,6 +17,7 @@ set(INCLUDE_FILES
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/data_sources/file_data_source.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/debug.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/ffmpeg_media_extractor.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/include/yapl/decoders/ffmpeg/audio_decoder.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/decoders/ffmpeg/video_decoder.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/idata_source.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/decoders/idecoder.hpp

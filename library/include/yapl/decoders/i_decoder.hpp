@@ -6,8 +6,8 @@
 
 namespace yapl::decoders {
 
-struct idecoder {
-    virtual ~idecoder() = default;
+struct i_decoder {
+    virtual ~i_decoder() = default;
     virtual bool decode(std::shared_ptr<track_info> info,
                         std::shared_ptr<media_sample> sample,
                         std::shared_ptr<media_sample> decoded_sample) = 0;

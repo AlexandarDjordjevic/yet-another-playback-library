@@ -1,6 +1,6 @@
 #pragma once
 
-#include "yapl/decoders/idecoder.hpp"
+#include "yapl/decoders/i_decoder.hpp"
 #include "yapl/imedia_extractor.hpp"
 #include "yapl/imedia_source.hpp"
 #include "yapl/media_info.hpp"
@@ -28,6 +28,7 @@ class media_pipeline {
     void pause_buffering();
     void stop();
     void seek(float position);
+    std::optional<std::shared_ptr<track>> get_video_track() const;
     std::shared_ptr<media_info> get_media_info() const;
     void register_buffer_update_handler(
         std::function<void(size_t, size_t)> callback);
@@ -41,10 +42,12 @@ class media_pipeline {
     std::atomic_bool m_data_source_eos{false};
     std::atomic_bool m_decoder_eos{false};
     std::thread m_video_decoder_thread;
+    std::thread m_audio_decoder_thread;
     std::shared_ptr<imedia_source> m_media_source;
     std::unique_ptr<imedia_extractor> m_media_extractor;
     std::vector<std::shared_ptr<track>> m_tracks;
-    std::unique_ptr<decoders::idecoder> m_video_decoder;
+    std::unique_ptr<decoders::i_decoder> m_video_decoder;
+    std::unique_ptr<decoders::i_decoder> m_audio_decoder;
     std::unique_ptr<renderers::i_video_renderer> m_video_render;
 };
 

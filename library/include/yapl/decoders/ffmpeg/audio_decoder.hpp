@@ -19,9 +19,9 @@ extern "C" {
 
 namespace yapl::decoders::ffmpeg {
 
-struct video_decoder : public i_decoder {
-    video_decoder(AVCodecID codec_id, std::span<uint8_t> extra_data);
-    ~video_decoder() override;
+struct audio_decoder : public i_decoder {
+    audio_decoder(AVCodecID codec_id, std::span<uint8_t> extra_data);
+    ~audio_decoder() override;
 
     bool decode(std::shared_ptr<track_info> info,
                 std::shared_ptr<media_sample> sample,

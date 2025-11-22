@@ -2,17 +2,19 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <iostream>
 #include <memory>
+#include <optional>
 #include <span>
+#include <stdexcept>
 #include <vector>
 
 namespace yapl {
 
 enum class track_type { unknown, audio, video, subtitle };
 
-struct stream_extra_data {
-    stream_extra_data(std::span<uint8_t> data) {
+struct video_extra_data {
+    video_extra_data(std::span<uint8_t> data) {
+        raw_data.assign(data.begin(), data.end());
         configuration_version = data[0];
         avc_profile_indication = data[1];
         profile_compatibility = data[2];
@@ -38,30 +40,61 @@ struct stream_extra_data {
     uint8_t pps_count;
     uint16_t pps_length{0};
     std::vector<uint8_t> pps_data;
+    std::vector<uint8_t> raw_data;
 };
 
-struct audio_info {
+struct audio_extra_data {
+    audio_extra_data(std::span<uint8_t> _data) {
+        if (_data.size() < 2 || _data.size() > 5) {
+            throw std::runtime_error{"Unexpected audio extra data size!"};
+        }
+        data.assign(_data.begin(), _data.end());
+    }
+
+    std::vector<uint8_t> data;
+};
+
+struct audio_track_uniques {
     size_t sample_rate;
     size_t channels;
     size_t bit_rate;
+    std::shared_ptr<audio_extra_data> extra_data;
 };
 
-struct video_info {
+struct video_track_uniques {
     size_t width;
     size_t height;
     double frame_rate;
     size_t bit_rate;
+    std::shared_ptr<video_extra_data> extra_data;
+
+    inline std::vector<uint8_t> get_extra_data() {
+        static auto video_extra_data = [&]() -> std::vector<uint8_t> {
+            static const uint8_t sc4[4] = {0, 0, 0, 1};
+            std::vector<uint8_t> tmp;
+            tmp.assign(sc4, sc4 + 4);
+            tmp.insert(tmp.end(), extra_data->sps_data.begin(),
+                       extra_data->sps_data.end());
+            tmp.insert(tmp.end(), sc4, sc4 + 4);
+            tmp.insert(tmp.end(), extra_data->pps_data.begin(),
+                       extra_data->pps_data.end());
+            return tmp;
+        }();
+        return video_extra_data;
+    }
 };
 
+using audio_track_specifics_t =
+    std::optional<std::shared_ptr<audio_track_uniques>>;
+using video_track_specifics_t =
+    std::optional<std::shared_ptr<video_track_uniques>>;
+
 struct track_info {
+    track_type type{track_type::unknown};
     size_t track_id;
-    track_type type;
     size_t codec_id;
-    std::shared_ptr<stream_extra_data> extra_data;
-    union {
-        audio_info audio;
-        video_info video;
-    } properties;
+    video_track_specifics_t video{std::nullopt};
+    audio_track_specifics_t audio{std::nullopt};
 };
 
 } // namespace yapl

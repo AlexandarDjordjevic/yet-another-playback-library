@@ -1,57 +1,11 @@
-#include "yapl/decoders/ffmpeg/video_decoder.hpp"
+#include "yapl/decoders/ffmpeg/audio_decoder.hpp"
 #include "yapl/debug.hpp"
-#include "yapl/media_sample.hpp"
-#include "yapl/track_info.hpp"
 #include "yapl/utilities.hpp"
-
-#include <cstdio>
-#include <cstring>
 #include <fmt/format.h>
-#include <libavutil/frame.h>
-#include <memory>
-#include <stdexcept>
-#ifdef __cplusplus
-extern "C" {
-#endif
-#include <libavcodec/avcodec.h>
-#include <libavcodec/codec.h>
-#include <libavcodec/codec_id.h>
-#include <libavcodec/codec_par.h>
-#include <libavutil/pixdesc.h>
-#ifdef __cplusplus
-}
-#endif
 
 namespace yapl::decoders::ffmpeg {
 
-void write_yuv420p_frame(AVFrame *frame, std::shared_ptr<media_sample> sample) {
-    // For YUV420p format
-    if (frame->format == AV_PIX_FMT_YUV420P) {
-        sample->data.resize(frame->width * frame->height * 3 / 2);
-        auto *ptr = sample->data.data();
-        // Write Y plane (luma)
-        for (int y = 0; y < frame->height; y++) {
-            memcpy(ptr, frame->data[0] + y * frame->linesize[0], frame->width);
-            ptr += frame->width;
-        }
-
-        // Write U plane (chroma)
-        for (int y = 0; y < frame->height / 2; y++) {
-            memcpy(ptr, frame->data[1] + y * frame->linesize[1],
-                   frame->width / 2);
-            ptr += frame->width / 2;
-        }
-
-        // Write V plane (chroma)
-        for (int y = 0; y < frame->height / 2; y++) {
-            memcpy(ptr, frame->data[2] + y * frame->linesize[2],
-                   frame->width / 2);
-            ptr += frame->width / 2;
-        }
-    }
-}
-
-video_decoder::video_decoder(AVCodecID codec_id,
+audio_decoder::audio_decoder(AVCodecID codec_id,
                              std::span<uint8_t> extra_data) {
     m_codecpar = avcodec_parameters_alloc();
     m_codecpar->codec_id = codec_id;
@@ -82,14 +36,15 @@ video_decoder::video_decoder(AVCodecID codec_id,
     }
 }
 
-video_decoder::~video_decoder() {
+audio_decoder::~audio_decoder() {
     avcodec_parameters_free(&m_codecpar);
     avcodec_free_context(&m_codec_ctx);
 }
 
-bool video_decoder::decode([[maybe_unused]] std::shared_ptr<track_info> info,
-                           std::shared_ptr<media_sample> sample,
-                           std::shared_ptr<media_sample> decoded_sample) {
+bool audio_decoder::decode(
+    [[maybe_unused]] std::shared_ptr<track_info> info,
+    std::shared_ptr<media_sample> sample,
+    [[maybe_unused]] std::shared_ptr<media_sample> decoded_sample) {
     AVPacket *packet = av_packet_alloc();
     AVFrame *frame = av_frame_alloc();
 
@@ -99,7 +54,6 @@ bool video_decoder::decode([[maybe_unused]] std::shared_ptr<track_info> info,
         av_frame_free(&frame);
     }};
 
-    // If sample is null, this is a flush request
     if (sample && sample->data.size() > 0) {
         packet->data = sample->data.data();
         packet->size = static_cast<int>(sample->data.size());
@@ -114,8 +68,7 @@ bool video_decoder::decode([[maybe_unused]] std::shared_ptr<track_info> info,
             return false;
         }
     } else {
-        // Send null packet to flush decoder
-        printf("Null packets...\n");
+        LOG_INFO("An empty audio frame!");
     }
 
     static int max_rcvd_frames = -1;
@@ -136,11 +89,35 @@ bool video_decoder::decode([[maybe_unused]] std::shared_ptr<track_info> info,
 
         if (max_rcvd_frames < ++received_frames) {
             max_rcvd_frames = received_frames;
-            LOG_INFO("Max recevide video frames: {}", received_frames);
+            LOG_INFO("Max recevide audio frames: {}", received_frames);
         }
-        write_yuv420p_frame(frame, decoded_sample);
-    }
 
+        switch (frame->format) {
+        case AV_SAMPLE_FMT_FLTP: {
+            decoded_sample->data.resize(frame->ch_layout.nb_channels *
+                                        frame->nb_samples * 4);
+            switch (frame->ch_layout.nb_channels) {
+            case 2: {
+                float *left = (float *)frame->extended_data[0];
+                float *right = (float *)frame->extended_data[1];
+                for (int i = 0; i < frame->nb_samples; i++) {
+                    decoded_sample->data[i * 2 + 0] = left[i];
+                    decoded_sample->data[i * 2 + 1] = right[i];
+                }
+            } break;
+            default: {
+                LOG_CRITICAL("Unsuported audio number of channels {}",
+                             frame->ch_layout.nb_channels);
+            } break;
+            }
+        } break;
+        default:
+            LOG_CRITICAL("Unsuported audio frame format {}",
+                         av_get_sample_fmt_name(
+                             static_cast<AVSampleFormat>(frame->format)));
+            break;
+        }
+    }
     return true;
 }
 

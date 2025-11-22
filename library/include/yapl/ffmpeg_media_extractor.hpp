@@ -30,14 +30,14 @@ struct ffmpeg_media_extractor : public imedia_extractor {
     read_sample_result read_sample() override;
 
   private:
+    size_t get_nal_header_len() const;
+
     void fetch_media_info();
 
     static packet_format determine_packet_format(size_t nal_size_len,
-                                                 const AVPacket &packet);
+                                                 const std::span<uint8_t>);
 
-    static void packet_to_annexb(size_t nal_size_length,
-                                 std::shared_ptr<media_info> _media_info,
-                                 AVPacket &pkt,
+    static void packet_to_annexb(size_t nal_size_length, AVPacket &pkt,
                                  std::shared_ptr<media_sample> &sample);
     // void packet_to_annexb(AVPacket &pkt,
     //                       std::shared_ptr<media_sample> &sample) const;

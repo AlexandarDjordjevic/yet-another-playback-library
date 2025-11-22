@@ -48,23 +48,23 @@ to_string(const std::shared_ptr<media_info> media_info) {
     if (!audio_tracks.empty()) {
         out += "[";
         for (const auto &t : audio_tracks) {
+            auto audio_props = t->audio.value();
             out += fmt::format("ID {}: Type: Audio, Sample Rate: {}, "
                                "Channels: {}, Bit Rate: {}",
-                               t->track_id, t->properties.audio.sample_rate,
-                               t->properties.audio.channels,
-                               t->properties.audio.bit_rate);
+                               t->track_id, audio_props->sample_rate,
+                               audio_props->channels, audio_props->bit_rate);
         }
         out += "] ";
     }
     if (!video_tracks.empty()) {
         out += "[";
         for (const auto &t : video_tracks) {
+            auto &video_props = t->video.value();
             out += fmt::format(
                 "ID {}: Type: Video, Width: {}, Height: {}, Frame Rate: "
                 "{}, Bit Rate: {}",
-                t->track_id, t->properties.video.width,
-                t->properties.video.height, t->properties.video.frame_rate,
-                t->properties.video.bit_rate);
+                t->track_id, video_props->width, video_props->height,
+                video_props->frame_rate, video_props->bit_rate);
         }
         out += "] ";
     }

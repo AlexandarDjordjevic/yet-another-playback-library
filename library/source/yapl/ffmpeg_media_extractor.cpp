@@ -1,12 +1,12 @@
 #include "yapl/ffmpeg_media_extractor.hpp"
 #include "yapl/debug.hpp"
-#include "yapl/imedia_extractor.hpp"
 #include "yapl/imedia_source.hpp"
 #include "yapl/media_info.hpp"
 #include "yapl/media_sample.hpp"
 #include "yapl/track_info.hpp"
 #include "yapl/utilities.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -95,31 +95,45 @@ void ffmpeg_media_extractor::fetch_media_info() {
         switch (codecpar->codec_type) {
         case AVMEDIA_TYPE_AUDIO: {
             _track.type = track_type::audio;
-            _track.properties.audio.sample_rate = codecpar->sample_rate;
-            _track.properties.audio.channels = codecpar->ch_layout.nb_channels;
-            _track.properties.audio.bit_rate = codecpar->bit_rate;
+
+            audio_track_uniques audio_uniques;
+            audio_uniques.sample_rate = codecpar->sample_rate;
+            audio_uniques.channels = codecpar->ch_layout.nb_channels;
+            audio_uniques.bit_rate = codecpar->bit_rate;
+            audio_uniques.extra_data =
+                std::make_shared<audio_extra_data>(std::span<uint8_t>{
+                    codecpar->extradata,
+                    codecpar->extradata + codecpar->extradata_size});
+
+            _track.audio =
+                std::make_shared<audio_track_uniques>(std::move(audio_uniques));
             m_media_info->tracks.push_back(
                 std::make_shared<track_info>(_track));
         } break;
         case AVMEDIA_TYPE_VIDEO: {
             _track.type = track_type::video;
-            _track.properties.video.width = codecpar->width;
-            _track.properties.video.height = codecpar->height;
-            _track.properties.video.frame_rate = av_q2d(stream->avg_frame_rate);
-            _track.properties.video.bit_rate = codecpar->bit_rate;
-            _track.extra_data =
-                std::make_shared<stream_extra_data>(std::span<uint8_t>{
+
+            video_track_uniques video_uniques;
+            video_uniques.width = codecpar->width;
+            video_uniques.height = codecpar->height;
+            video_uniques.frame_rate = av_q2d(stream->avg_frame_rate);
+            video_uniques.bit_rate = codecpar->bit_rate;
+            video_uniques.extra_data =
+                std::make_shared<video_extra_data>(std::span<uint8_t>{
                     codecpar->extradata,
                     codecpar->extradata + codecpar->extradata_size});
+
+            _track.video =
+                std::make_shared<video_track_uniques>(std::move(video_uniques));
             m_media_info->tracks.push_back(
                 std::make_shared<track_info>(_track));
         } break;
         case AVMEDIA_TYPE_SUBTITLE: {
-            track_info subtitleTrack;
-            subtitleTrack.track_id = i;
-            subtitleTrack.type = track_type::subtitle;
+            track_info subtitle_track;
+            subtitle_track.track_id = i;
+            subtitle_track.type = track_type::subtitle;
             m_media_info->tracks.push_back(
-                std::make_shared<track_info>(subtitleTrack));
+                std::make_shared<track_info>(subtitle_track));
         } break;
         default:
             LOG_WARN("Unknown track type - ID: {}", i);
@@ -199,6 +213,18 @@ struct avcc_frame {
     std::span<uint8_t> data;
 };
 
+size_t ffmpeg_media_extractor::get_nal_header_len() const {
+    auto video_track = std::ranges::find_if(
+        m_media_info->tracks, [](const std::shared_ptr<track_info> _info) {
+            return _info->type == track_type::video;
+        });
+    if (video_track == m_media_info->tracks.end()) {
+        LOG_CRITICAL("Video track is not detected!");
+        throw std::runtime_error{"Video track is not detected!"};
+    }
+    return video_track->get()->video.value()->extra_data->nal_size_length;
+}
+
 read_sample_result ffmpeg_media_extractor::read_sample() {
     read_sample_result output;
 
@@ -207,7 +233,6 @@ read_sample_result ffmpeg_media_extractor::read_sample() {
     auto read_frame_result = av_read_frame(m_fmt_ctx, &m_pkt);
     auto stream_id = static_cast<size_t>(m_pkt.stream_index);
     if (read_frame_result < 0) {
-
         if (AVERROR_EOF) {
             LOG_INFO("ffmpeg_media_extractor - Track {} reached EOS",
                      m_pkt.stream_index);
@@ -246,11 +271,12 @@ read_sample_result ffmpeg_media_extractor::read_sample() {
     sample->pts = m_pkt.pts;
     sample->dts = m_pkt.dts;
     sample->duration = m_pkt.duration;
-
-    if (sample->track_id == 1)
-        packet_to_annexb(
-            m_media_info->tracks[sample->track_id]->extra_data->nal_size_length,
-            get_media_info(), m_pkt, sample);
+    if (m_fmt_ctx->streams[m_pkt.stream_index]->codecpar->codec_type ==
+        AVMEDIA_TYPE_VIDEO) {
+        packet_to_annexb(get_nal_header_len(), m_pkt, sample);
+    } else {
+        sample->data.assign(m_pkt.data, m_pkt.data + m_pkt.size);
+    }
 
     return {.stream_id = stream_id,
             .error = read_sample_error_t::no_errror,
@@ -258,12 +284,9 @@ read_sample_result ffmpeg_media_extractor::read_sample() {
 }
 
 ffmpeg_media_extractor::packet_format
-ffmpeg_media_extractor::determine_packet_format(size_t nal_size_len,
-                                                const AVPacket &pkt) {
-    const uint8_t *data = pkt.data;
-    const size_t size = pkt.size;
-
-    if (size < 4)
+ffmpeg_media_extractor::determine_packet_format(
+    size_t nal_size_len, const std::span<uint8_t> packet) {
+    if (packet.size() < 4)
         return packet_format::raw_nal_payload;
 
     if (nal_size_len <= 1) {
@@ -273,8 +296,8 @@ ffmpeg_media_extractor::determine_packet_format(size_t nal_size_len,
     // annex-b
     if (nal_size_len == 3 || nal_size_len == 4) {
         auto annex_b_header = &"\x00\x00\x00\x01"[nal_size_len - 4];
-        if (size >= nal_size_len &&
-            memcmp(data, annex_b_header, nal_size_len) == 0) {
+        if (packet.size() >= nal_size_len &&
+            memcmp(packet.data(), annex_b_header, nal_size_len) == 0) {
             return packet_format::annexb;
         }
     }
@@ -282,18 +305,20 @@ ffmpeg_media_extractor::determine_packet_format(size_t nal_size_len,
     // avcc
     uint32_t declared = 0;
     for (size_t i = 0; i < nal_size_len; i++)
-        declared = (declared << 8) | data[i];
+        declared = (declared << 8) | packet.data()[i];
 
-    if (declared > 0 && declared <= size - nal_size_len)
+    if (declared > 0 && declared <= packet.size() - nal_size_len)
         return packet_format::avcc;
 
     return packet_format::unknown;
 }
 
 void ffmpeg_media_extractor::packet_to_annexb(
-    size_t nal_size_length, std::shared_ptr<media_info> _media_info,
-    AVPacket &pkt, std::shared_ptr<media_sample> &sample) {
-    const auto fmt = determine_packet_format(nal_size_length, pkt);
+    size_t nal_size_length, AVPacket &pkt,
+    std::shared_ptr<media_sample> &sample) {
+
+    const auto fmt = determine_packet_format(nal_size_length,
+                                             {pkt.data, pkt.data + pkt.size});
     auto *position = pkt.data;
     const auto *end = pkt.data + pkt.size;
 
@@ -321,20 +346,6 @@ void ffmpeg_media_extractor::packet_to_annexb(
                 LOG_INFO("ffmpeg extractor - EOS detected!");
             }
 
-            if (frame.header.fields.type == nal_unit_type::idr_slice ||
-                frame.header.fields.type == nal_unit_type::coded_sliece) {
-                auto &sps_data =
-                    _media_info->tracks[pkt.stream_index]->extra_data->sps_data;
-                auto &pps_data =
-                    _media_info->tracks[pkt.stream_index]->extra_data->pps_data;
-                sample->data.insert(sample->data.end(), sc4, sc4 + 4);
-                sample->data.insert(sample->data.end(), sps_data.begin(),
-                                    sps_data.end());
-                sample->data.insert(sample->data.end(), sc4, sc4 + 4);
-                sample->data.insert(sample->data.end(), pps_data.begin(),
-                                    pps_data.end());
-            }
-
             sample->data.insert(sample->data.end(), sc4, sc4 + 4);
             sample->data.insert(sample->data.end(), frame.data.begin(),
                                 frame.data.end());
@@ -344,7 +355,7 @@ void ffmpeg_media_extractor::packet_to_annexb(
         return;
 
     default:
-        LOG_ERROR("Unknown packet format!");
+        LOG_ERROR("Unknown packet format! Packet size {}", pkt.size);
         return;
     }
 }
