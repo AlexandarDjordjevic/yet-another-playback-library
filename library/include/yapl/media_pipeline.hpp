@@ -5,6 +5,7 @@
 #include "yapl/imedia_source.hpp"
 #include "yapl/media_info.hpp"
 #include "yapl/renderers/i_audio_renderer.hpp"
+#include "yapl/renderers/i_audio_renderer_factory.hpp"
 #include "yapl/renderers/i_video_renderer.hpp"
 #include "yapl/renderers/i_video_renderer_factory.hpp"
 #include "yapl/track.hpp"
@@ -18,14 +19,15 @@ namespace yapl {
 
 class media_pipeline {
   public:
-    media_pipeline(std::unique_ptr<renderers::i_video_renderer_factory> vrf, std::unique_ptr<renderers::i_audio_renderer_factory> arf);
+    media_pipeline(std::unique_ptr<renderers::i_video_renderer_factory> vrf,
+                   std::unique_ptr<renderers::i_audio_renderer_factory> arf);
     ~media_pipeline();
 
     media_pipeline() = delete;
-    media_pipeline(const media_pipeline&) = delete;
-    media_pipeline operator=(const media_pipeline&) = delete;
-    media_pipeline(media_pipeline&&) = delete;
-    media_pipeline operator=(media_pipeline&&) = delete;
+    media_pipeline(const media_pipeline &) = delete;
+    media_pipeline operator=(const media_pipeline &) = delete;
+    media_pipeline(media_pipeline &&) = delete;
+    media_pipeline operator=(media_pipeline &&) = delete;
 
     void load(const std::string_view url);
     void play();

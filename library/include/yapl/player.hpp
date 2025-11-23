@@ -1,9 +1,6 @@
 #pragma once
 
-#include "yapl/media_info.hpp"
 #include "yapl/media_pipeline.hpp"
-#include "yapl/renderers/sdl/video_renderer.hpp"
-#include "yapl/renderers/sdl/video_renderer_factory.hpp"
 
 #include <functional>
 #include <string_view>
@@ -12,7 +9,8 @@ namespace yapl {
 
 class player {
   public:
-    player(std::unique_ptr<renderers::i_video_renderer_factory> vrf, std::unique_ptr<renderers::i_audio_renderer_factory> arf);
+    player(std::unique_ptr<renderers::i_video_renderer_factory> vrf,
+           std::unique_ptr<renderers::i_audio_renderer_factory> arf);
     player();
     ~player() = default;
 

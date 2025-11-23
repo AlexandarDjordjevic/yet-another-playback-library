@@ -16,6 +16,7 @@ set(INCLUDE_FILES
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/renderers/i_audio_renderer_factory.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/data_sources/file_data_source.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/debug.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/include/yapl/blocking_queue.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/ffmpeg_media_extractor.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/decoders/ffmpeg/audio_decoder.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/yapl/decoders/ffmpeg/video_decoder.hpp
@@ -114,7 +115,6 @@ target_include_directories(yapl PUBLIC
 target_link_libraries(yapl PUBLIC
     spdlog::spdlog
     fmt::fmt
-    SDL2::SDL2
 )
 
 # Platform-specific FFmpeg linking

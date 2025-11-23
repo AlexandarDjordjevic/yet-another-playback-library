@@ -19,7 +19,7 @@ struct track {
     std::shared_ptr<track_info> m_track_info;
     bool m_data_source_eos_reached;
     size_t m_buffered_duration;
-    data_queue<std::shared_ptr<media_sample>> m_sample_queue;
+    blocking_queue<std::shared_ptr<media_sample>> m_sample_queue;
 };
 
 } // namespace yapl

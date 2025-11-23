@@ -1,4 +1,4 @@
-#include "yapl/renderers/sdl/video_renderer.hpp"
+#include "sdl/video_renderer.hpp"
 
 #include "SDL_render.h"
 #include "yapl/debug.hpp"
@@ -7,11 +7,10 @@
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
-#include <optional>
 
 using namespace std::chrono_literals;
 
-namespace yapl::renderers::sdl {
+namespace renderers::sdl {
 
 video_renderer::video_renderer()
     : m_width{640}, m_height{480}, m_running{false}, m_decoder_drained{false} {
@@ -65,7 +64,7 @@ void video_renderer::resize(size_t width, size_t height) {
                                   static_cast<int>(m_height));
 }
 
-void video_renderer::push_frame(std::shared_ptr<media_sample> frame) {
+void video_renderer::push_frame(std::shared_ptr<yapl::media_sample> frame) {
     m_frames.push(frame);
 }
 
@@ -98,7 +97,7 @@ void video_renderer::render() {
             .count();
     };
 
-    static std::optional<std::shared_ptr<media_sample>> pending_frame;
+    static std::optional<std::shared_ptr<yapl::media_sample>> pending_frame;
     if (!pending_frame) {
         pending_frame = m_frames.try_pop();
         if (!pending_frame) {
@@ -139,4 +138,4 @@ void video_renderer::render() {
     SDL_RenderPresent(m_renderer);
 }
 
-} // namespace yapl::renderers::sdl
+} // namespace renderers::sdl

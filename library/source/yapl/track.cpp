@@ -11,7 +11,7 @@ namespace yapl {
 track::track(std::shared_ptr<track_info> info)
     : m_track_info{info}, m_data_source_eos_reached{false},
       m_buffered_duration{0},
-      m_sample_queue{data_queue<std::shared_ptr<media_sample>>(1024)} {}
+      m_sample_queue{blocking_queue<std::shared_ptr<media_sample>>(1024)} {}
 
 void track::push_sample(const std::shared_ptr<media_sample> sample) {
     m_buffered_duration += sample->duration;

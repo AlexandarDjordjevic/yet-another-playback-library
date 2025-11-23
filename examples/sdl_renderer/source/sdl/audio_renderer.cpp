@@ -1,4 +1,4 @@
-#include "yapl/renderers/sdl/audio_renderer.hpp"
+#include "sdl/audio_renderer.hpp"
 #include "yapl/debug.hpp"
 
 #include <SDL.h>
@@ -7,7 +7,7 @@
 #include <cstdlib>
 #include <fmt/format.h>
 
-namespace yapl::renderers::sdl {
+namespace renderers::sdl {
 
 audio_renderer::audio_renderer() : m_running{false}, m_decoder_drained{false} {
     if (SDL_Init(SDL_INIT_AUDIO) != 0) {
@@ -35,7 +35,7 @@ audio_renderer::audio_renderer() : m_running{false}, m_decoder_drained{false} {
 
 audio_renderer::~audio_renderer() { m_running = false; }
 
-void audio_renderer::push_frame(std::shared_ptr<media_sample> frame) {
+void audio_renderer::push_frame(std::shared_ptr<yapl::media_sample> frame) {
     m_frames.push(frame);
 }
 
@@ -44,12 +44,13 @@ void audio_renderer::render() {
     if (!frame.has_value()) {
         return;
     }
-    auto result = SDL_QueueAudio(m_audio_device, frame.value()->data.data(),
-                                 static_cast<uint32_t>(frame.value()->data.size()));
+    auto result =
+        SDL_QueueAudio(m_audio_device, frame.value()->data.data(),
+                       static_cast<uint32_t>(frame.value()->data.size()));
     if (result < 0) {
         throw std::runtime_error{
             fmt::format("SDL_QueueAudio failed {}", SDL_GetError())};
     }
 }
 
-} // namespace yapl::renderers::sdl
+} // namespace renderers::sdl

@@ -8,13 +8,13 @@
 #include <cstddef>
 #include <thread>
 
-namespace yapl::renderers::sdl {
+namespace renderers::sdl {
 
-struct video_renderer : i_video_renderer {
+struct video_renderer : yapl::renderers::i_video_renderer {
     video_renderer();
     ~video_renderer();
     void resize(size_t, size_t) override;
-    void push_frame(std::shared_ptr<media_sample>) override;
+    void push_frame(std::shared_ptr<yapl::media_sample>) override;
     void stop() override;
     void render() override;
     void set_decoder_drained() override;
@@ -22,7 +22,7 @@ struct video_renderer : i_video_renderer {
   private:
     size_t m_width;
     size_t m_height;
-    data_queue<std::shared_ptr<media_sample>> m_frames{60};
+    yapl::blocking_queue<std::shared_ptr<yapl::media_sample>> m_frames{60};
     std::atomic_bool m_running;
     std::atomic_bool m_decoder_drained;
     std::thread m_worker_thread;
@@ -31,4 +31,4 @@ struct video_renderer : i_video_renderer {
     SDL_Texture *m_texture;
 };
 
-} // namespace yapl::renderers::sdl
+} // namespace renderers::sdl

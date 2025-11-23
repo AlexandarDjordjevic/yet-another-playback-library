@@ -9,7 +9,7 @@
 
 namespace yapl {
 
-template <typename T> class data_queue {
+template <typename T> class blocking_queue {
   public:
     enum class pop_result { no_error, timeout };
 
@@ -18,10 +18,11 @@ template <typename T> class data_queue {
         std::optional<T> data;
     };
 
-    explicit data_queue(size_t capacity)
+    explicit blocking_queue(size_t capacity)
         : m_capacity(capacity), m_head(0), m_tail(0), m_count(0) {
         if (capacity == 0)
-            throw std::invalid_argument("data_queue requires capacity >= 1");
+            throw std::invalid_argument(
+                "blocking_queue requires capacity >= 1");
         m_pool.resize(capacity);
     }
 
