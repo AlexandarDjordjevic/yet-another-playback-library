@@ -12,7 +12,7 @@ namespace yapl {
 
 class player {
   public:
-    player(std::unique_ptr<renderers::i_video_renderer_factory> vrf);
+    player(std::unique_ptr<renderers::i_video_renderer_factory> vrf, std::unique_ptr<renderers::i_audio_renderer_factory> arf);
     player();
     ~player() = default;
 

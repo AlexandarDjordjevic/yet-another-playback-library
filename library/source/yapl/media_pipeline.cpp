@@ -8,7 +8,7 @@
 #include "yapl/media_pipeline.hpp"
 #include "yapl/media_source.hpp"
 #include "yapl/renderers/i_video_renderer_factory.hpp"
-#include "yapl/renderers/sdl/audio_renderer.hpp"
+#include "yapl/renderers/i_audio_renderer_factory.hpp"
 #include "yapl/track.hpp"
 #include "yapl/track_info.hpp"
 
@@ -43,7 +43,7 @@ inline auto get_track_type(std::span<std::shared_ptr<track>> _tracks,
 } // namespace
 
 media_pipeline::media_pipeline(
-    std::unique_ptr<renderers::i_video_renderer_factory> vrf) {
+    std::unique_ptr<renderers::i_video_renderer_factory> vrf, std::unique_ptr<renderers::i_audio_renderer_factory> arf) {
     // TODO: Refactor -> Media pipeline should get a media source factory
     m_media_source = std::make_unique<media_source>();
     if (!m_media_source) {
@@ -57,8 +57,7 @@ media_pipeline::media_pipeline(
     }
 
     m_video_render = vrf->create_video_renderer();
-
-    m_audio_render = std::make_unique<renderers::sdl::audio_renderer>();
+    m_audio_render = arf->create_audio_renderer();
 
     // TODO: Refactor -> media pipeline should get a decoder factory
     m_buffering_thread = std::thread([&]() {

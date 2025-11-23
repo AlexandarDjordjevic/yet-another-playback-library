@@ -8,13 +8,9 @@
 
 namespace yapl {
 
-player::player(std::unique_ptr<renderers::i_video_renderer_factory> vrf)
-    : m_media_pipeline{std::make_unique<media_pipeline>(std::move(vrf))} {
+player::player(std::unique_ptr<renderers::i_video_renderer_factory> vrf, std::unique_ptr<renderers::i_audio_renderer_factory> arf)
+    : m_media_pipeline{std::make_unique<media_pipeline>(std::move(vrf), std::move(arf))} {
     LOG_INFO("player initialized");
-}
-
-player::player() : m_media_pipeline{std::make_unique<media_pipeline>(std::make_unique<renderers::sdl::video_renderer_factory>())}{
-
 }
 
 void player::load(const std::string_view url) {
