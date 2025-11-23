@@ -45,7 +45,7 @@ void audio_renderer::render() {
         return;
     }
     auto result = SDL_QueueAudio(m_audio_device, frame.value()->data.data(),
-                                 frame.value()->data.size());
+                                 static_cast<uint32_t>(frame.value()->data.size()));
     if (result < 0) {
         throw std::runtime_error{
             fmt::format("SDL_QueueAudio failed {}", SDL_GetError())};

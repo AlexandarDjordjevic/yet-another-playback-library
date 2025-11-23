@@ -29,7 +29,7 @@ audio_decoder::audio_decoder(AVCodecID codec_id,
     memcpy(m_codec_ctx->extradata, extra_data.data(), extra_data.size());
     memset(m_codec_ctx->extradata + extra_data.size(), 0,
            AV_INPUT_BUFFER_PADDING_SIZE);
-    m_codec_ctx->extradata_size = extra_data.size();
+    m_codec_ctx->extradata_size = static_cast<int>(extra_data.size());
 
     if (avcodec_open2(m_codec_ctx, codec, nullptr) < 0) {
         throw std::runtime_error("Could not open codec");

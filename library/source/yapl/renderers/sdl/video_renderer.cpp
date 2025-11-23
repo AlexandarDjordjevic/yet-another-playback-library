@@ -76,9 +76,9 @@ void video_renderer::set_decoder_drained() { m_decoder_drained = true; }
 void video_renderer::render() {
     SDL_Event event;
 
-    const int y_pitch = m_width;
-    const int u_pitch = m_width / 2;
-    const int v_pitch = m_width / 2;
+    const int y_pitch = static_cast<int>(m_width);
+    const int u_pitch = static_cast<int>(m_width / 2);
+    const int v_pitch = static_cast<int>(m_width / 2);
 
     while (SDL_PollEvent(&event)) {
         if (event.type == SDL_QUIT) {
@@ -107,8 +107,8 @@ void video_renderer::render() {
     }
 
     auto frame = *pending_frame;
-    const long now_ms = render_time_ms();
-    static long last_check_ms = 0;
+    const auto now_ms = render_time_ms();
+    static size_t last_check_ms = 0;
 
     // Too early → wait
     if (frame->pts > now_ms + 15) {
