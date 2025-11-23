@@ -45,9 +45,6 @@ struct video_extra_data {
 
 struct audio_extra_data {
     audio_extra_data(std::span<uint8_t> _data) {
-        if (_data.size() < 2 || _data.size() > 5) {
-            throw std::runtime_error{"Unexpected audio extra data size!"};
-        }
         data.assign(_data.begin(), _data.end());
     }
 
