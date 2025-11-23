@@ -48,6 +48,12 @@ template <typename T> class data_queue {
         return item;
     }
 
+    const T peek() {
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_not_empty.wait(lock, [this] { return m_count > 0; });
+        return m_pool[m_head];
+    }
+
     pop_output pop(std::chrono::milliseconds timeout_ms) {
         std::unique_lock<std::mutex> lock(m_mutex);
         bool success = m_not_empty.wait_for(lock, timeout_ms,

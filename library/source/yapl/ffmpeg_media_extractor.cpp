@@ -265,11 +265,15 @@ read_sample_result ffmpeg_media_extractor::read_sample() {
 
     static size_t debug_id{0};
 
+    auto time_base = m_fmt_ctx->streams[m_pkt.stream_index]->time_base;
+
     auto sample = std::make_shared<media_sample>();
     sample->debug_id = debug_id++;
     sample->track_id = m_pkt.stream_index;
-    sample->pts = m_pkt.pts;
-    sample->dts = m_pkt.dts;
+    sample->pts =
+        static_cast<int64_t>(m_pkt.pts * time_base.num * 1000 / time_base.den);
+    sample->dts =
+        static_cast<int64_t>(m_pkt.dts * time_base.num * 1000 / time_base.den);
     sample->duration = m_pkt.duration;
     if (m_fmt_ctx->streams[m_pkt.stream_index]->codecpar->codec_type ==
         AVMEDIA_TYPE_VIDEO) {

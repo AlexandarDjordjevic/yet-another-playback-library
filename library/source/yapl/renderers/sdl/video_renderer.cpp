@@ -2,6 +2,7 @@
 
 #include "SDL_render.h"
 #include "yapl/debug.hpp"
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 
@@ -87,8 +88,30 @@ void video_renderer::render() {
         return;
     }
 
+    auto get_render_time_ms = [] {
+        static auto timestamp_base{std::chrono::steady_clock::now()};
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+                   std::chrono::steady_clock::now() - timestamp_base)
+            .count();
+    };
+
     // Pointers to Y, U, V planes
-    auto result = m_frames.pop();
+    auto result = m_frames.peek();
+    auto render_time = get_render_time_ms();
+    static long previous_check{0};
+    if (result->pts > (render_time + 15)) {
+        previous_check = render_time;
+        return;
+    }
+
+    if (result->pts < (render_time - 15)) {
+        LOG_INFO("Frame late. PTS: {}ms, render time: {}ms, previous check: "
+                 "{}. Dropping frame!",
+                 result->pts, render_time, previous_check);
+        m_frames.pop();
+        return;
+    }
+
     uint8_t *y_plane = result->data.data();
     uint8_t *u_plane = y_plane + m_width * m_height;
     uint8_t *v_plane = u_plane + (m_width * m_height) / 4;
@@ -98,7 +121,8 @@ void video_renderer::render() {
     SDL_RenderClear(m_renderer);
     SDL_RenderCopy(m_renderer, m_texture, nullptr, nullptr);
     SDL_RenderPresent(m_renderer);
-    SDL_Delay(15);
+    m_frames.pop();
+    // SDL_Delay(1);
 }
 
 } // namespace yapl::renderers::sdl

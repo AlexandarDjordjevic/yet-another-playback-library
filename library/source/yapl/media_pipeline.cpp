@@ -114,6 +114,9 @@ media_pipeline::media_pipeline(
             case read_sample_error_t::no_errror: {
                 auto sample = read_sample_output.sample;
                 auto decoded = std::make_shared<media_sample>();
+                decoded->duration = sample->duration;
+                decoded->pts = sample->pts;
+                decoded->dts = sample->dts;
                 m_video_decoder->decode(m_tracks[sample->track_id]->get_info(),
                                         sample, decoded);
                 if (decoded->data.size() > 0) {
@@ -159,6 +162,9 @@ media_pipeline::media_pipeline(
             case read_sample_error_t::no_errror: {
                 auto sample = read_sample_output.sample;
                 auto decoded = std::make_shared<media_sample>();
+                decoded->duration = sample->duration;
+                decoded->pts = sample->pts;
+                decoded->dts = sample->dts;
                 m_audio_decoder->decode(m_tracks[sample->track_id]->get_info(),
                                         sample, decoded);
 
@@ -235,7 +241,7 @@ void media_pipeline::play() {
     m_buffering_cv.notify_one();
     while (true) {
         m_video_render->render();
-        m_audio_render->render();
+        // m_audio_render->render();
     }
 }
 
