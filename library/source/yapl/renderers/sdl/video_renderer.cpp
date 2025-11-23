@@ -2,9 +2,12 @@
 
 #include "SDL_render.h"
 #include "yapl/debug.hpp"
+#include "yapl/media_sample.hpp"
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
+#include <optional>
 
 using namespace std::chrono_literals;
 
@@ -73,9 +76,9 @@ void video_renderer::set_decoder_drained() { m_decoder_drained = true; }
 void video_renderer::render() {
     SDL_Event event;
 
-    static int y_pitch = static_cast<int>(m_width);
-    static int u_pitch = static_cast<int>(m_width) / 2;
-    static int v_pitch = static_cast<int>(m_width) / 2;
+    const int y_pitch = m_width;
+    const int u_pitch = m_width / 2;
+    const int v_pitch = m_width / 2;
 
     while (SDL_PollEvent(&event)) {
         if (event.type == SDL_QUIT) {
@@ -88,41 +91,52 @@ void video_renderer::render() {
         return;
     }
 
-    auto get_render_time_ms = [] {
-        static auto timestamp_base{std::chrono::steady_clock::now()};
+    auto render_time_ms = [] {
+        static const auto start = std::chrono::steady_clock::now();
         return std::chrono::duration_cast<std::chrono::milliseconds>(
-                   std::chrono::steady_clock::now() - timestamp_base)
+                   std::chrono::steady_clock::now() - start)
             .count();
     };
 
-    // Pointers to Y, U, V planes
-    auto result = m_frames.peek();
-    auto render_time = get_render_time_ms();
-    static long previous_check{0};
-    if (result->pts > (render_time + 15)) {
-        previous_check = render_time;
+    static std::optional<std::shared_ptr<media_sample>> pending_frame;
+    if (!pending_frame) {
+        pending_frame = m_frames.try_pop();
+        if (!pending_frame) {
+            return;
+        }
+    }
+
+    auto frame = *pending_frame;
+    const long now_ms = render_time_ms();
+    static long last_check_ms = 0;
+
+    // Too early → wait
+    if (frame->pts > now_ms + 15) {
+        last_check_ms = now_ms;
         return;
     }
 
-    if (result->pts < (render_time - 15)) {
+    // Consume pendig frame
+    pending_frame.reset();
+
+    // Frame is to late?
+    if (frame->pts < now_ms - 15) {
         LOG_INFO("Frame late. PTS: {}ms, render time: {}ms, previous check: "
                  "{}. Dropping frame!",
-                 result->pts, render_time, previous_check);
-        m_frames.pop();
+                 frame->pts, now_ms, last_check_ms);
         return;
     }
 
-    uint8_t *y_plane = result->data.data();
-    uint8_t *u_plane = y_plane + m_width * m_height;
-    uint8_t *v_plane = u_plane + (m_width * m_height) / 4;
-    // Update texture with YUV data
+    uint8_t *const y_plane = frame->data.data();
+    uint8_t *const u_plane = y_plane + m_width * m_height;
+    uint8_t *const v_plane = u_plane + (m_width * m_height) / 4;
+
     SDL_UpdateYUVTexture(m_texture, nullptr, y_plane, y_pitch, u_plane, u_pitch,
                          v_plane, v_pitch);
+
     SDL_RenderClear(m_renderer);
     SDL_RenderCopy(m_renderer, m_texture, nullptr, nullptr);
     SDL_RenderPresent(m_renderer);
-    m_frames.pop();
-    // SDL_Delay(1);
 }
 
 } // namespace yapl::renderers::sdl

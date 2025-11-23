@@ -88,7 +88,7 @@ media_pipeline::media_pipeline(
                 break;
             }
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     });
 
@@ -136,7 +136,7 @@ media_pipeline::media_pipeline(
                 break;
             }
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     });
 
@@ -183,7 +183,7 @@ media_pipeline::media_pipeline(
                 break;
             }
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     });
 }
@@ -241,7 +241,8 @@ void media_pipeline::play() {
     m_buffering_cv.notify_one();
     while (true) {
         m_video_render->render();
-        // m_audio_render->render();
+        m_audio_render->render();
+        std::this_thread::sleep_for(5ms);
     }
 }
 

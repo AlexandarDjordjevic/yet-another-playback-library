@@ -40,9 +40,12 @@ void audio_renderer::push_frame(std::shared_ptr<media_sample> frame) {
 }
 
 void audio_renderer::render() {
-    auto frame = m_frames.pop();
-    auto result =
-        SDL_QueueAudio(m_audio_device, frame->data.data(), frame->data.size());
+    auto frame = m_frames.try_pop();
+    if (!frame.has_value()) {
+        return;
+    }
+    auto result = SDL_QueueAudio(m_audio_device, frame.value()->data.data(),
+                                 frame.value()->data.size());
     if (result < 0) {
         throw std::runtime_error{
             fmt::format("SDL_QueueAudio failed {}", SDL_GetError())};
