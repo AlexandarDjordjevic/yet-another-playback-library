@@ -5,22 +5,41 @@
 #include <memory>
 #include <optional>
 #include <span>
-#include <stdexcept>
+#include <string_view>
 #include <vector>
 
 namespace yapl {
 
 enum class track_type { unknown, audio, video, subtitle };
 
+// Compile-time track type to string conversion
+constexpr std::string_view track_type_to_string(track_type type) noexcept {
+    switch (type) {
+        case track_type::audio:    return "audio";
+        case track_type::video:    return "video";
+        case track_type::subtitle: return "subtitle";
+        default:                   return "unknown";
+    }
+}
+
+// Constexpr bit extraction helpers for AVC parsing
+constexpr uint8_t extract_nal_size_length(uint8_t byte) noexcept {
+    return (byte & 0b00000011) + 1;
+}
+
+constexpr uint8_t extract_sps_count(uint8_t byte) noexcept {
+    return byte & 0b00011111;
+}
+
 struct video_extra_data {
-    video_extra_data(std::span<uint8_t> data) {
+    explicit video_extra_data(std::span<uint8_t> data) {
         raw_data.assign(data.begin(), data.end());
         configuration_version = data[0];
         avc_profile_indication = data[1];
         profile_compatibility = data[2];
         avc_level_indication = data[3];
-        nal_size_length = (data[4] & 0b00000011) + 1;
-        sps_count = data[5] & 0b00011111;
+        nal_size_length = extract_nal_size_length(data[4]);
+        sps_count = extract_sps_count(data[5]);
         sps_length = static_cast<uint16_t>(data[6]) << 8 | data[7];
         sps_data.assign(&data[8], &data[8 + sps_length]);
         pps_count = data[8 + sps_length];
@@ -33,8 +52,8 @@ struct video_extra_data {
     uint8_t avc_profile_indication;
     uint8_t profile_compatibility;
     uint8_t avc_level_indication;
-    uint8_t nal_size_length; // 111111 + nal_length_size_minus1 (3 or 4)
-    uint8_t sps_count;       // 111 + numOfSPS
+    uint8_t nal_size_length; 
+    uint8_t sps_count; 
     uint16_t sps_length;
     std::vector<uint8_t> sps_data;
     uint8_t pps_count;
@@ -59,25 +78,30 @@ struct audio_track_uniques {
 };
 
 struct video_track_uniques {
+    static constexpr uint8_t nal_start_code[4] = {0, 0, 0, 1};
+
     size_t width;
     size_t height;
     double frame_rate;
     size_t bit_rate;
     std::shared_ptr<video_extra_data> extra_data;
 
-    inline std::vector<uint8_t> get_extra_data() {
-        static auto video_extra_data = [&]() -> std::vector<uint8_t> {
-            static const uint8_t sc4[4] = {0, 0, 0, 1};
-            std::vector<uint8_t> tmp;
-            tmp.assign(sc4, sc4 + 4);
-            tmp.insert(tmp.end(), extra_data->sps_data.begin(),
-                       extra_data->sps_data.end());
-            tmp.insert(tmp.end(), sc4, sc4 + 4);
-            tmp.insert(tmp.end(), extra_data->pps_data.begin(),
-                       extra_data->pps_data.end());
-            return tmp;
-        }();
-        return video_extra_data;
+    std::vector<uint8_t> get_extra_data() const {
+        std::vector<uint8_t> result;
+        result.reserve(sizeof(nal_start_code) * 2 +
+                       extra_data->sps_data.size() +
+                       extra_data->pps_data.size());
+
+        result.insert(result.end(), std::begin(nal_start_code),
+                      std::end(nal_start_code));
+        result.insert(result.end(), extra_data->sps_data.begin(),
+                      extra_data->sps_data.end());
+        result.insert(result.end(), std::begin(nal_start_code),
+                      std::end(nal_start_code));
+        result.insert(result.end(), extra_data->pps_data.begin(),
+                      extra_data->pps_data.end());
+
+        return result;
     }
 };
 

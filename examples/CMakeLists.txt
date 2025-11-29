@@ -1,1 +1,1 @@
-add_subdirectory(sdl_renderer)
+add_subdirectory(yapl_player)

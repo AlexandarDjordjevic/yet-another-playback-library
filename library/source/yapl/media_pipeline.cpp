@@ -1,272 +1,251 @@
-
-#include "yapl/media_pipeline.hpp"
-#include "yapl/debug.hpp"
-#include "yapl/decoders/ffmpeg/audio_decoder.hpp"
-#include "yapl/decoders/ffmpeg/video_decoder.hpp"
-#include "yapl/ffmpeg_media_extractor.hpp"
+#include "yapl/detail/media_pipeline.hpp"
+#include "yapl/detail/debug.hpp"
 #include "yapl/media_info.hpp"
-#include "yapl/media_pipeline.hpp"
-#include "yapl/media_source.hpp"
-#include "yapl/renderers/i_video_renderer_factory.hpp"
-#include "yapl/renderers/i_audio_renderer_factory.hpp"
 #include "yapl/track.hpp"
 #include "yapl/track_info.hpp"
 
-#include <algorithm>
 #include <chrono>
-#include <libavcodec/codec_id.h>
-#include <memory>
-#include <mutex>
-#include <optional>
-#include <thread>
-#include <vector>
 
 using namespace std::chrono_literals;
 
 namespace yapl {
 
 namespace {
-
-inline auto get_track_type(std::span<std::shared_ptr<track>> _tracks,
-                           track_type _track_type)
-    -> std::optional<std::shared_ptr<track>> {
-    auto _track = std::ranges::find_if(
-        _tracks, [_track_type](const std::shared_ptr<track> &track) {
-            return track->get_info()->type == _track_type;
-        });
-    if (_track != _tracks.end()) {
-        return *_track;
-    }
-    return std::nullopt;
-}
-
+constexpr auto kThreadSleep = 1ms;
+constexpr auto kRenderSleep = 5ms;
 } // namespace
 
 media_pipeline::media_pipeline(
-    std::unique_ptr<renderers::i_video_renderer_factory> vrf, std::unique_ptr<renderers::i_audio_renderer_factory> arf) {
-    // TODO: Refactor -> Media pipeline should get a media source factory
-    m_media_source = std::make_unique<media_source>();
-    if (!m_media_source) {
-        throw std::runtime_error("Media source is not created!");
-    }
-
-    m_media_extractor =
-        std::make_unique<ffmpeg_media_extractor>(m_media_source);
-    if (!m_media_extractor) {
-        throw std::runtime_error("Failed to construct media extractor!");
-    }
-
-    m_video_render = vrf->create_video_renderer();
-    m_audio_render = arf->create_audio_renderer();
-
-    // TODO: Refactor -> media pipeline should get a decoder factory
-    m_buffering_thread = std::thread([&]() {
-        while (!m_data_source_eos) {
-            if (!m_buffering) {
-                std::unique_lock<std::mutex> lg{m_buffering_mtx};
-                m_buffering_cv.wait(lg);
-            }
-            auto read_sample_output = m_media_extractor->read_sample();
-            switch (read_sample_output.error) {
-            case read_sample_error_t::no_errror: {
-                auto sample = read_sample_output.sample;
-                m_tracks[read_sample_output.stream_id]->push_sample(sample);
-
-            } break;
-            case read_sample_error_t::invalid_sample:
-            case read_sample_error_t::invalid_packet_size:
-            case read_sample_error_t::invalid_stream_index:
-            case read_sample_error_t::timeout:
-                LOG_ERROR("Extractor read sample failed!");
-                break;
-            case read_sample_error_t::end_of_stream:
-                LOG_INFO("Data source reached EOS");
-                m_data_source_eos = true;
-                m_tracks[read_sample_output.stream_id]
-                    ->set_data_source_reached_eos();
-                break;
-            }
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
-    });
-
-    m_video_decoder_thread = std::thread([&]() {
-        m_decoder_eos = false;
-        while (!m_decoder_eos) {
-            if (m_tracks.size() == 0) {
-                std::this_thread::sleep_for(1s);
-                continue;
-            }
-
-            static auto video_track_opt =
-                get_track_type(m_tracks, track_type::video);
-
-            if (!video_track_opt.has_value()) {
-                LOG_WARN("Media stream without video!");
-                return;
-            }
-
-            auto video_track = video_track_opt.value();
-            auto read_sample_output = video_track->pop_sample();
-            switch (read_sample_output.error) {
-            case read_sample_error_t::no_errror: {
-                auto sample = read_sample_output.sample;
-                auto decoded = std::make_shared<media_sample>();
-                decoded->duration = sample->duration;
-                decoded->pts = sample->pts;
-                decoded->dts = sample->dts;
-                m_video_decoder->decode(m_tracks[sample->track_id]->get_info(),
-                                        sample, decoded);
-                if (decoded->data.size() > 0) {
-                    m_video_render->push_frame(decoded);
-                }
-            } break;
-            case read_sample_error_t::invalid_sample:
-            case read_sample_error_t::invalid_packet_size:
-            case read_sample_error_t::invalid_stream_index:
-            case read_sample_error_t::timeout:
-                LOG_ERROR("Pop sample failed!");
-                break;
-            case read_sample_error_t::end_of_stream:
-                LOG_INFO("All frames are decoded. Stopping decoder!");
-                m_decoder_eos = true;
-                m_video_render->set_decoder_drained();
-                break;
-            }
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
-    });
-
-    m_audio_decoder_thread = std::thread([&]() {
-        LOG_INFO("Audio decoder thread started!");
-        m_decoder_eos = false;
-        while (!m_decoder_eos) {
-            if (m_tracks.size() == 0) {
-                std::this_thread::sleep_for(1s);
-                continue;
-            }
-
-            static auto audio_track_opt =
-                get_track_type(m_tracks, track_type::audio);
-
-            if (!audio_track_opt.has_value()) {
-                LOG_WARN("Media stream without audio!");
-                return;
-            }
-            auto audio_track = audio_track_opt.value();
-            auto read_sample_output = audio_track->pop_sample();
-            switch (read_sample_output.error) {
-            case read_sample_error_t::no_errror: {
-                auto sample = read_sample_output.sample;
-                auto decoded = std::make_shared<media_sample>();
-                decoded->duration = sample->duration;
-                decoded->pts = sample->pts;
-                decoded->dts = sample->dts;
-                m_audio_decoder->decode(m_tracks[sample->track_id]->get_info(),
-                                        sample, decoded);
-
-                m_audio_render->push_frame(decoded);
-            } break;
-            case read_sample_error_t::invalid_sample:
-            case read_sample_error_t::invalid_packet_size:
-            case read_sample_error_t::invalid_stream_index:
-            case read_sample_error_t::timeout:
-                LOG_ERROR("Pop sample failed!");
-                break;
-            case read_sample_error_t::end_of_stream:
-                LOG_INFO("All frames are decoded. Stopping decoder!");
-                m_decoder_eos = true;
-                // m_video_render->set_decoder_drained();
-                break;
-            }
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
-    });
-}
+    std::unique_ptr<i_media_source_factory> msf,
+    std::unique_ptr<i_media_extractor_factory> mef,
+    std::unique_ptr<decoders::i_decoder_factory> df,
+    std::unique_ptr<renderers::i_video_renderer_factory> vrf,
+    std::unique_ptr<renderers::i_audio_renderer_factory> arf,
+    std::unique_ptr<input::i_input_handler_factory> ihf)
+    : m_media_source_factory{std::move(msf)},
+      m_media_extractor_factory{std::move(mef)},
+      m_decoder_factory{std::move(df)},
+      m_media_source{m_media_source_factory->create()},
+      m_media_extractor{m_media_extractor_factory->create(m_media_source)},
+      m_video_render{vrf->create_video_renderer()},
+      m_audio_render{arf->create_audio_renderer()},
+      m_input_handler{ihf->create()} {}
 
 media_pipeline::~media_pipeline() {
-    if (m_buffering_thread.joinable()) {
-        m_buffering_thread.join();
-    }
-    if (m_video_decoder_thread.joinable()) {
-        m_video_decoder_thread.join();
-    }
-    if (m_audio_decoder_thread.joinable()) {
-        m_audio_decoder_thread.join();
-    }
+    stop();
+    LOG_TRACE("Media pipeline destroyed");
 }
 
-void media_pipeline::load(const std::string_view url) {
-    assert(m_media_source);
-    assert(m_media_extractor);
+void media_pipeline::load(std::string_view url) {
+    LOG_INFO("Loading media: {}", std::string(url));
 
     m_media_source->open(url);
     m_media_extractor->start();
-    auto _media_info = m_media_extractor->get_media_info();
-    auto _video_track_uniques =
-        (*std::ranges::find_if(_media_info->tracks, [](const auto &track) {
-            return track->type == track_type::video;
-        }))->video.value();
 
-    m_video_render->resize(_video_track_uniques->width,
-                           _video_track_uniques->height);
+    auto media_info = m_media_extractor->get_media_info();
 
-    for (const auto &_track_info : _media_info->tracks) {
-        LOG_DEBUG("media_pipeline - Track ID: {}, Type: {}",
-                  _track_info->track_id, static_cast<int>(_track_info->type));
-        m_tracks.emplace_back(std::make_shared<track>(_track_info));
+    m_tracks.clear();
+    m_video_track = nullptr;
+    m_audio_track = nullptr;
 
-        if (_track_info->type == track_type::video) {
-            m_video_decoder = std::make_unique<decoders::ffmpeg::video_decoder>(
-                static_cast<AVCodecID>(_track_info->codec_id),
-                _track_info->video.value()->extra_data->raw_data);
+    for (const auto &track_info : media_info->tracks) {
+        LOG_DEBUG("Track ID: {}, Type: {}", track_info->track_id,
+                  track_type_to_string(track_info->type));
+
+        auto new_track = std::make_shared<track>(track_info);
+        m_tracks.emplace_back(new_track);
+
+        if (track_info->type == track_type::video && !m_video_track) {
+            m_video_track = new_track;
+            m_video_decoder = m_decoder_factory->create_video_decoder(
+                track_info->codec_id,
+                track_info->video.value()->extra_data->raw_data);
+            m_video_render->resize(track_info->video.value()->width,
+                                   track_info->video.value()->height);
         }
 
-        if (_track_info->type == track_type::audio) {
-            m_audio_decoder = std::make_unique<decoders::ffmpeg::audio_decoder>(
-                static_cast<AVCodecID>(_track_info->codec_id),
-                _track_info->audio.value()->extra_data->data);
+        if (track_info->type == track_type::audio && !m_audio_track) {
+            m_audio_track = new_track;
+            m_audio_decoder = m_decoder_factory->create_audio_decoder(
+                track_info->codec_id,
+                track_info->audio.value()->extra_data->data);
         }
     }
-    m_media_source->reset();
+
+    LOG_INFO("Media loaded successfully");
 }
 
 void media_pipeline::play() {
-    LOG_INFO("media_pipeline::play");
-    m_buffering = true;
-    m_buffering_cv.notify_one();
-    while (true) {
-        m_video_render->render();
-        m_audio_render->render();
-        std::this_thread::sleep_for(5ms);
+    LOG_DEBUG("Playback starting");
+    m_running = true;
+    m_paused = false;
+
+    m_buffering_thread = std::jthread([this](std::stop_token st) {
+        LOG_DEBUG("Buffering thread started");
+        while (!st.stop_requested()) {
+            if (m_paused) {
+                std::this_thread::sleep_for(kThreadSleep);
+                continue;
+            }
+
+            auto result = m_media_extractor->read_sample();
+            if (result.error == read_sample_error_t::no_errror) {
+                if (result.stream_id < m_tracks.size()) {
+                    m_tracks[result.stream_id]->push_sample(result.sample);
+                }
+            } else if (result.error == read_sample_error_t::end_of_stream) {
+                LOG_DEBUG("Buffering: EOS reached");
+                for (auto &t : m_tracks) {
+                    t->set_data_source_reached_eos();
+                }
+                break;
+            }
+            std::this_thread::sleep_for(kThreadSleep);
+        }
+        LOG_DEBUG("Buffering thread exiting");
+    });
+
+    if (m_video_track) {
+        m_video_decoder_thread = std::jthread([this](std::stop_token st) {
+            LOG_DEBUG("Video decoder thread started");
+            while (!st.stop_requested()) {
+                if (m_paused) {
+                    std::this_thread::sleep_for(kThreadSleep);
+                    continue;
+                }
+
+                auto result = m_video_track->pop_sample();
+                if (result.error == read_sample_error_t::no_errror) {
+                    auto decoded = std::make_shared<media_sample>();
+                    decoded->duration = result.sample->duration;
+                    decoded->pts = result.sample->pts;
+                    decoded->dts = result.sample->dts;
+                    m_video_decoder->decode(m_video_track->get_info(),
+                                            result.sample, decoded);
+                    if (!decoded->data.empty()) {
+                        m_video_render->push_frame(decoded);
+                    }
+                } else if (result.error == read_sample_error_t::end_of_stream) {
+                    LOG_DEBUG("Video decoder: EOS reached");
+                    break;
+                }
+                std::this_thread::sleep_for(kThreadSleep);
+            }
+            LOG_DEBUG("Video decoder thread exiting");
+        });
+    }
+
+    if (m_audio_track) {
+        m_audio_decoder_thread = std::jthread([this](std::stop_token st) {
+            LOG_DEBUG("Audio decoder thread started");
+            while (!st.stop_requested()) {
+                if (m_paused) {
+                    std::this_thread::sleep_for(kThreadSleep);
+                    continue;
+                }
+
+                auto result = m_audio_track->pop_sample();
+                if (result.error == read_sample_error_t::no_errror) {
+                    auto decoded = std::make_shared<media_sample>();
+                    decoded->duration = result.sample->duration;
+                    decoded->pts = result.sample->pts;
+                    decoded->dts = result.sample->dts;
+                    m_audio_decoder->decode(m_audio_track->get_info(),
+                                            result.sample, decoded);
+                    m_audio_render->push_frame(decoded);
+                } else if (result.error == read_sample_error_t::end_of_stream) {
+                    LOG_DEBUG("Audio decoder: EOS reached");
+                    break;
+                }
+                std::this_thread::sleep_for(kThreadSleep);
+            }
+            LOG_DEBUG("Audio decoder thread exiting");
+        });
+    }
+
+    while (m_running) {
+        m_input_handler->poll();
+
+        if (!m_paused) {
+            m_video_render->render();
+            m_audio_render->render();
+        }
+        std::this_thread::sleep_for(kRenderSleep);
     }
 }
 
-void media_pipeline::pause() { m_buffering = false; }
+void media_pipeline::pause() {
+    LOG_DEBUG("Playback paused");
+    m_paused = true;
+    if (m_video_render)
+        m_video_render->pause();
+    if (m_audio_render)
+        m_audio_render->pause();
+}
+
+void media_pipeline::resume() {
+    LOG_DEBUG("Playback resumed");
+    m_paused = false;
+    if (m_video_render)
+        m_video_render->resume();
+    if (m_audio_render)
+        m_audio_render->resume();
+}
+
+bool media_pipeline::is_paused() const { return m_paused; }
 
 void media_pipeline::stop() {
-    // Implement stop logic
-}
+    LOG_DEBUG("Playback stopping");
+    m_running = false;
 
-void media_pipeline::buffer() {
-    m_buffering = true;
-    m_buffering_cv.notify_one();
-}
+    for (auto &t : m_tracks) {
+        t->shutdown();
+    }
 
-void media_pipeline::pause_buffering() { m_buffering = false; }
-
-void media_pipeline::seek([[maybe_unused]] float position) {
-    // Implement seek logic
+    if (m_video_render)
+        m_video_render->stop();
+    if (m_audio_render)
+        m_audio_render->stop();
 }
 
 std::shared_ptr<media_info> media_pipeline::get_media_info() const {
     return m_media_extractor->get_media_info();
 }
 
-void media_pipeline::register_buffer_update_handler(
-    [[maybe_unused]] std::function<void(size_t, size_t)> callback) {}
+pipeline_stats media_pipeline::get_stats() const {
+    pipeline_stats stats;
+
+    if (m_video_render) {
+        stats.progress.position_ms = m_video_render->get_current_position_ms();
+    }
+    if (m_media_extractor) {
+        auto info = m_media_extractor->get_media_info();
+        if (info) {
+            stats.progress.duration_ms =
+                static_cast<int64_t>(info->duration / 1000);
+        }
+    }
+
+    stats.media_source_buffered_bytes = m_media_source->available();
+
+    if (m_video_track) {
+        stats.video_track_queue = m_video_track->get_queue_stats();
+    }
+    if (m_audio_track) {
+        stats.audio_track_queue = m_audio_track->get_queue_stats();
+    }
+    if (m_video_render) {
+        stats.video_renderer_queue = m_video_render->get_queue_stats();
+    }
+    if (m_audio_render) {
+        stats.audio_renderer_queue = m_audio_render->get_queue_stats();
+    }
+
+    return stats;
+}
+
+void media_pipeline::set_command_callback(input::command_callback callback) {
+    m_input_handler->set_command_callback(std::move(callback));
+}
 
 } // namespace yapl

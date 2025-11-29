@@ -2,9 +2,11 @@
     "name": "yapl",
     "version-string": "1.0.0",
     "dependencies": [
-        "spdlog",
+        "curl",
         "ffmpeg",
+        "fmt",
+        "gtest",
         "sdl2",
-        "fmt"
+        "spdlog"
     ]
 }

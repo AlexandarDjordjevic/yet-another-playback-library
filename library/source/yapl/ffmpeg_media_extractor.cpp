@@ -1,10 +1,10 @@
-#include "yapl/ffmpeg_media_extractor.hpp"
-#include "yapl/debug.hpp"
-#include "yapl/imedia_source.hpp"
+#include "yapl/detail/ffmpeg_media_extractor.hpp"
+#include "yapl/detail/debug.hpp"
+#include "yapl/i_media_source.hpp"
 #include "yapl/media_info.hpp"
 #include "yapl/media_sample.hpp"
 #include "yapl/track_info.hpp"
-#include "yapl/utilities.hpp"
+#include "yapl/detail/utilities.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -19,13 +19,17 @@
 
 namespace yapl {
 
+namespace {
+constexpr size_t kAvioBufferSize = 4096;
+} // namespace
+
 ffmpeg_media_extractor::ffmpeg_media_extractor(
-    std::shared_ptr<imedia_source> _media_source)
+    std::shared_ptr<i_media_source> _media_source)
     : m_media_source{_media_source}, m_fmt_ctx{nullptr}, m_avio_ctx{nullptr} {
 
     avformat_network_init();
     auto av_read_packet = [](void *opaque, uint8_t *buf, int buf_size) -> int {
-        auto media_source = static_cast<imedia_source *>(opaque);
+        auto media_source = static_cast<i_media_source *>(opaque);
         auto read = media_source->read_packet(
             buf_size, {buf, static_cast<size_t>(buf_size)});
         if (read == 0) {
@@ -34,12 +38,12 @@ ffmpeg_media_extractor::ffmpeg_media_extractor(
         return static_cast<int>(read);
     };
 
-    m_avio_buffer = static_cast<uint8_t *>(av_malloc(4096));
+    m_avio_buffer = static_cast<uint8_t *>(av_malloc(kAvioBufferSize));
     if (!m_avio_buffer) {
         throw std::runtime_error("Could not allocate AVIO buffer");
     }
     m_avio_ctx =
-        avio_alloc_context(m_avio_buffer, 4096, 0, m_media_source.get(),
+        avio_alloc_context(m_avio_buffer, kAvioBufferSize, 0, m_media_source.get(),
                            av_read_packet, nullptr, nullptr);
     if (!m_avio_ctx) {
         throw std::runtime_error("Could not alocate AVIOContext");
@@ -84,9 +88,6 @@ void ffmpeg_media_extractor::fetch_media_info() {
     for (auto i = 0u; i < m_fmt_ctx->nb_streams; ++i) {
         AVStream *stream = m_fmt_ctx->streams[i];
         AVCodecParameters *codecpar = stream->codecpar;
-
-        printf("Codec: %s (%s)\n", avcodec_get_name(codecpar->codec_id),
-               av_get_media_type_string(codecpar->codec_type));
 
         track_info _track{};
         _track.track_id = i;
@@ -234,8 +235,8 @@ read_sample_result ffmpeg_media_extractor::read_sample() {
     auto stream_id = static_cast<size_t>(m_pkt.stream_index);
     if (read_frame_result < 0) {
         if (AVERROR_EOF) {
-            LOG_INFO("ffmpeg_media_extractor - Track {} reached EOS",
-                     m_pkt.stream_index);
+            LOG_DEBUG("Media extractor: Track {} reached EOS",
+                      m_pkt.stream_index);
             return {.stream_id = stream_id,
                     .error = read_sample_error_t::end_of_stream,
                     .sample = {}};
@@ -343,11 +344,11 @@ void ffmpeg_media_extractor::packet_to_annexb(
 
             if (frame.size == 0 ||
                 frame.header.fields.type == nal_unit_type::unspecified) {
-                LOG_INFO("Nu size {}, type {}", frame.size,
-                         to_string(frame.header.fields.type));
+                LOG_TRACE("NAL unit: size={}, type={}", frame.size,
+                          to_string(frame.header.fields.type));
             }
             if (frame.header.fields.type == nal_unit_type::end_of_stream) {
-                LOG_INFO("ffmpeg extractor - EOS detected!");
+                LOG_DEBUG("Media extractor: NAL EOS detected");
             }
 
             sample->data.insert(sample->data.end(), sc4, sc4 + 4);

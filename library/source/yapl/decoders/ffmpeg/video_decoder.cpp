@@ -1,8 +1,8 @@
-#include "yapl/decoders/ffmpeg/video_decoder.hpp"
-#include "yapl/debug.hpp"
+#include "yapl/detail/decoders/ffmpeg/video_decoder.hpp"
+#include "yapl/detail/debug.hpp"
+#include "yapl/detail/utilities.hpp"
 #include "yapl/media_sample.hpp"
 #include "yapl/track_info.hpp"
-#include "yapl/utilities.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -85,6 +85,7 @@ video_decoder::video_decoder(AVCodecID codec_id,
 video_decoder::~video_decoder() {
     avcodec_parameters_free(&m_codecpar);
     avcodec_free_context(&m_codec_ctx);
+    LOG_TRACE("Video decoder destroyed");
 }
 
 bool video_decoder::decode([[maybe_unused]] std::shared_ptr<track_info> info,
@@ -99,7 +100,6 @@ bool video_decoder::decode([[maybe_unused]] std::shared_ptr<track_info> info,
         av_frame_free(&frame);
     }};
 
-    // If sample is null, this is a flush request
     if (sample && sample->data.size() > 0) {
         packet->data = sample->data.data();
         packet->size = static_cast<int>(sample->data.size());
@@ -114,8 +114,7 @@ bool video_decoder::decode([[maybe_unused]] std::shared_ptr<track_info> info,
             return false;
         }
     } else {
-        // Send null packet to flush decoder
-        printf("Null packets...\n");
+        LOG_DEBUG("Null packet sent to video decoder");
     }
 
     static int max_rcvd_frames = -1;

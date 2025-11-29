@@ -1,7 +1,8 @@
 #pragma once
 
-#include "yapl/blocking_queue.hpp"
+#include "yapl/detail/blocking_queue.hpp"
 #include "yapl/media_sample.hpp"
+#include "yapl/pipeline_stats.hpp"
 #include "yapl/track_info.hpp"
 #include <memory>
 
@@ -13,7 +14,9 @@ struct track {
     void push_sample(std::shared_ptr<media_sample> sample);
     read_sample_result pop_sample();
     void set_data_source_reached_eos();
+    void shutdown();
     [[nodiscard]] std::shared_ptr<track_info> get_info() const;
+    [[nodiscard]] queue_stats get_queue_stats() const;
 
   private:
     std::shared_ptr<track_info> m_track_info;

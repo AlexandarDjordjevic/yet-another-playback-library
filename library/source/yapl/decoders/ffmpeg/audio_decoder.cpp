@@ -1,6 +1,6 @@
-#include "yapl/decoders/ffmpeg/audio_decoder.hpp"
-#include "yapl/debug.hpp"
-#include "yapl/utilities.hpp"
+#include "yapl/detail/decoders/ffmpeg/audio_decoder.hpp"
+#include "yapl/detail/debug.hpp"
+#include "yapl/detail/utilities.hpp"
 #include <fmt/format.h>
 
 namespace yapl::decoders::ffmpeg {
@@ -39,6 +39,7 @@ audio_decoder::audio_decoder(AVCodecID codec_id,
 audio_decoder::~audio_decoder() {
     avcodec_parameters_free(&m_codecpar);
     avcodec_free_context(&m_codec_ctx);
+    LOG_TRACE("Audio decoder destroyed");
 }
 
 bool audio_decoder::decode([[maybe_unused]] std::shared_ptr<track_info> info,
@@ -67,7 +68,7 @@ bool audio_decoder::decode([[maybe_unused]] std::shared_ptr<track_info> info,
             return false;
         }
     } else {
-        LOG_INFO("An empty audio frame!");
+        LOG_WARN("Empty audio frame received");
     }
 
     static int max_rcvd_frames = -1;

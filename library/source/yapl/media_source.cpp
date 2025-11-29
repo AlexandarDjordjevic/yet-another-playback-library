@@ -1,33 +1,40 @@
-#include "yapl/media_source.hpp"
-#include "yapl/data_sources/file_data_source.hpp"
+#include "yapl/detail/media_source.hpp"
+
+#include <stdexcept>
 
 namespace yapl {
 
-media_source::media_source()
-    : m_data_source{std::make_shared<data_sources::file_data_source>(
-          "BigBuckBunny.mp4")} {}
+media_source::media_source() : m_data_source{std::unique_ptr<data_sources::file>{}} {}
 
 void media_source::open(const std::string_view url) {
-    m_data_source = std::make_shared<data_sources::file_data_source>(url);
-    m_data_source->open();
+    m_data_source = data_sources::create(url);
+    data_sources::visit(m_data_source, [](auto& ds) { ds.open(); });
 }
 
-void media_source::close() { m_data_source->close(); }
+void media_source::close() {
+    data_sources::visit(m_data_source, [](auto& ds) { ds.close(); });
+}
 
 size_t media_source::read_packet(size_t size, std::span<uint8_t> buffer) {
-    if (m_data_source->is_open() == false) {
+    auto is_open = data_sources::visit(m_data_source, [](const auto& ds) { return ds.is_open(); });
+    if (!is_open) {
         throw std::runtime_error("Media source is not open");
     }
-    return m_data_source->read_data(size, buffer);
+    return data_sources::visit(m_data_source, [size, buffer](auto& ds) {
+        return ds.read_data(size, buffer);
+    });
 }
 
 size_t media_source::available() const {
-    if (m_data_source->is_open() == false) {
+    auto is_open = data_sources::visit(m_data_source, [](const auto& ds) { return ds.is_open(); });
+    if (!is_open) {
         throw std::runtime_error("Media source is not open");
     }
-    return m_data_source->available();
+    return data_sources::visit(m_data_source, [](const auto& ds) { return ds.available(); });
 }
 
-void media_source::reset() { m_data_source->reset(); }
+void media_source::reset() {
+    data_sources::visit(m_data_source, [](auto& ds) { ds.reset(); });
+}
 
 } // namespace yapl

@@ -1,109 +1,112 @@
 {
-    "version": 3,
-
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 21,
+        "patch": 0
+    },
     "configurePresets": [
         {
+            "name": "base",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
             "name": "debug-linux",
-            "displayName": "Debug Config (Linux/macOS)",
-            "description": "Debug build for Unix-like systems",
+            "inherits": "base",
+            "displayName": "Debug (Linux/macOS)",
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_CXX_STANDARD": "20",
-                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-                "CMAKE_GENERATOR": "Ninja",
-                "CMAKE_CXX_FLAGS_DEBUG": "-g3 -O0 -Wall -Wextra -Wpedantic -Werror",
-                "CMAKE_VERBOSE_MAKEFILE": "ON"
+                "CMAKE_CXX_FLAGS_DEBUG": "-g3 -O0 -Wall -Wextra -Wpedantic -Werror"
             }
         },
-
         {
-            "name": "debug-windows",
-            "displayName": "Debug Config Visual Studio(Windows)",
-            "description": "Debug configuration using MSVC compiler",
-            "generator": "Visual Studio 18 2026",
-            "binaryDir": "${sourceDir}/build/debug-msvc",
+            "name": "release-linux",
+            "inherits": "base",
+            "displayName": "Release (Linux/macOS)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build-release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_CXX_FLAGS_RELEASE": "-O3 -DNDEBUG"
+            }
+        },
+        {
+            "name": "debug-windows-msvc",
+            "inherits": "base",
+            "displayName": "Debug MSVC (Windows)",
+            "generator": "Visual Studio 17 2022",
+            "architecture": "x64",
+            "binaryDir": "${sourceDir}/build-msvc",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_CXX_STANDARD": "20",
-                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-                "CMAKE_VERBOSE_MAKEFILE": "ON",
-                "CMAKE_CXX_FLAGS_DEBUG": "/Zi /Od /W4 /WX",
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "VCPKG_TARGET_TRIPLET": "x64-windows"
             }
         },
-
         {
             "name": "debug-windows-clang",
-            "displayName": "Debug Config Clang Ninja (Windows)",
-            "description": "Debug configuration using Clang compiler",
+            "inherits": "base",
+            "displayName": "Debug Clang (Windows)",
             "generator": "Ninja",
-            "binaryDir": "${sourceDir}/build/debug-clang",
+            "binaryDir": "${sourceDir}/build-clang",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_CXX_STANDARD": "20",
-                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-                "CMAKE_VERBOSE_MAKEFILE": "ON",
                 "CMAKE_CXX_COMPILER": "clang++",
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "VCPKG_TARGET_TRIPLET": "x64-windows"
             }
         }
     ],
-
     "buildPresets": [
         {
             "name": "debug-linux",
-            "configurePreset": "debug-linux",
-            "jobs": 8
+            "configurePreset": "debug-linux"
         },
         {
-            "name": "debug-windows",
-            "configurePreset": "debug-windows",
-            "jobs": 8
+            "name": "release-linux",
+            "configurePreset": "release-linux"
+        },
+        {
+            "name": "debug-windows-msvc",
+            "configurePreset": "debug-windows-msvc"
+        },
+        {
+            "name": "debug-windows-clang",
+            "configurePreset": "debug-windows-clang"
         }
     ],
-
     "testPresets": [
         {
             "name": "debug-linux",
             "configurePreset": "debug-linux",
             "output": {
-                "outputOnFailure": true,
-                "verbosity": "verbose"
-            },
-            "execution": {
-                "jobs": 16,
-                "noTestsAction": "error"
+                "outputOnFailure": true
             }
         },
         {
-            "name": "debug-windows",
-            "configurePreset": "debug-windows",
+            "name": "release-linux",
+            "configurePreset": "release-linux",
             "output": {
-                "outputOnFailure": true,
-                "verbosity": "verbose"
-            },
-            "execution": {
-                "jobs": 16,
-                "noTestsAction": "error"
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "debug-windows-msvc",
+            "configurePreset": "debug-windows-msvc",
+            "output": {
+                "outputOnFailure": true
             }
         },
         {
             "name": "debug-windows-clang",
             "configurePreset": "debug-windows-clang",
             "output": {
-                "outputOnFailure": true,
-                "verbosity": "verbose"
-            },
-            "execution": {
-                "jobs": 16,
-                "noTestsAction": "error"
+                "outputOnFailure": true
             }
         }
     ]

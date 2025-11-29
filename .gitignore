@@ -5,3 +5,5 @@ cmake_build_debug/
 .idea/
 docs/
 video_samples/
+.cache/
+.cursor/

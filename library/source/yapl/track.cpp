@@ -1,10 +1,7 @@
 #include "yapl/track.hpp"
-#include "yapl/blocking_queue.hpp"
+#include "yapl/detail/blocking_queue.hpp"
 #include "yapl/media_sample.hpp"
 #include "yapl/track_info.hpp"
-#include <memory>
-
-using namespace std::chrono_literals;
 
 namespace yapl {
 
@@ -20,7 +17,11 @@ void track::push_sample(const std::shared_ptr<media_sample> sample) {
 
 void track::set_data_source_reached_eos() { m_data_source_eos_reached = true; }
 
+void track::shutdown() { m_sample_queue.shutdown(); }
+
 std::shared_ptr<track_info> track::get_info() const { return m_track_info; }
+
+queue_stats track::get_queue_stats() const { return m_sample_queue.stats(); }
 
 read_sample_result track::pop_sample() {
     if (m_sample_queue.is_empty() && m_data_source_eos_reached) {
@@ -30,9 +31,16 @@ read_sample_result track::pop_sample() {
     }
 
     auto data = m_sample_queue.pop();
+    if (!data) {
+        // Queue was shutdown or empty
+        return {.stream_id = m_track_info->track_id,
+                .error = read_sample_error_t::end_of_stream,
+                .sample{}};
+    }
+
     return {.stream_id = m_track_info->track_id,
             .error = read_sample_error_t::no_errror,
-            .sample = data};
+            .sample = *data};
 }
 
 } // namespace yapl
