@@ -50,7 +50,6 @@ audio_renderer::audio_renderer(media_clock &clock, size_t queue_size)
 
 audio_renderer::~audio_renderer() {
     stop();
-    // RAII handle cleans up automatically
     LOG_TRACE("Audio renderer destroyed");
 }
 
@@ -69,19 +68,15 @@ void audio_renderer::render() {
         return;
     }
 
-    // Check current SDL queue size
     uint32_t queued_bytes = SDL_GetQueuedAudioSize(m_audio_device->get());
     int64_t sdl_buffer_ms = bytes_to_ms(queued_bytes);
 
-    // Report audio latency to clock so video can sync
     clock.set_audio_latency_ms(sdl_buffer_ms);
 
-    // Don't queue more if buffer is full
     if (queued_bytes > kMaxQueueBytes) {
         return;
     }
 
-    // Get next frame if we don't have one
     if (!m_pending_frame) {
         m_pending_frame = m_frames.try_pop();
         if (!m_pending_frame) {
@@ -92,16 +87,10 @@ void audio_renderer::render() {
     auto frame = *m_pending_frame;
     int64_t audio_playback_pos = clock.get_time_ms();
 
-    // The audio we're about to queue will be heard after the current SDL buffer
-    // So we should queue audio that has PTS = current_time + sdl_buffer_latency
-    // In other words: queue if frame->pts <= audio_playback_pos + sdl_buffer_ms
-
     if (frame->pts > audio_playback_pos + sdl_buffer_ms + 50) {
-        // Frame is too far in the future, wait
         return;
     }
 
-    // Drop audio that's too old (would cause desync)
     if (frame->pts < audio_playback_pos - 100) {
         LOG_DEBUG("Dropping late audio. PTS: {}ms, playback: {}ms", frame->pts,
                   audio_playback_pos);
@@ -111,10 +100,8 @@ void audio_renderer::render() {
 
     m_pending_frame.reset();
 
-    // Debug: log timing every second
     static int64_t last_log_time = 0;
     if (audio_playback_pos - last_log_time > 1000) {
-        // Audio currently being heard = clock_time - sdl_buffer_latency
         int64_t audio_heard_now = audio_playback_pos - sdl_buffer_ms;
         LOG_INFO("[AUDIO] clock: {}ms, PTS: {}ms, SDL buf: {}ms, playing: {}ms",
                  audio_playback_pos, frame->pts, sdl_buffer_ms,

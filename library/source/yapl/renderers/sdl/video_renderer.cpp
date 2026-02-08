@@ -34,7 +34,6 @@ video_renderer::video_renderer(media_clock &clock, size_t queue_size)
 
 video_renderer::~video_renderer() {
     stop();
-    // RAII handles clean up automatically
     LOG_TRACE("Video renderer destroyed");
 }
 
@@ -42,7 +41,6 @@ void video_renderer::resize(size_t width, size_t height) {
     m_width = width;
     m_height = height;
 
-    // Reset and recreate resources (RAII handles clean up automatically)
     m_texture.reset();
     m_renderer.reset();
     m_window.reset();
@@ -91,7 +89,6 @@ void video_renderer::render() {
         return;
     }
 
-    // Start the clock when first frame is ready
     if (!clock.is_started()) {
         clock.start();
     }
@@ -121,7 +118,6 @@ void video_renderer::render() {
 
     m_current_position_ms = frame->pts;
 
-    // Debug: log timing every second
     static int64_t last_log_time = 0;
     if (video_time_ms - last_log_time > 1000) {
         LOG_INFO(
