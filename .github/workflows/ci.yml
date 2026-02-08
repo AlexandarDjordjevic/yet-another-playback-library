@@ -43,6 +43,7 @@ jobs:
   sanitizer-asan:
     name: AddressSanitizer
     runs-on: ubuntu-latest
+    needs: build-and-test
 
     steps:
     - uses: actions/checkout@v4
@@ -75,6 +76,7 @@ jobs:
   sanitizer-tsan:
     name: ThreadSanitizer
     runs-on: ubuntu-latest
+    needs: build-and-test
 
     steps:
     - uses: actions/checkout@v4
@@ -107,6 +109,7 @@ jobs:
   sanitizer-ubsan:
     name: UndefinedBehaviorSanitizer
     runs-on: ubuntu-latest
+    needs: build-and-test
 
     steps:
     - uses: actions/checkout@v4
@@ -139,6 +142,7 @@ jobs:
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
+    needs: [sanitizer-asan, sanitizer-tsan, sanitizer-ubsan]
 
     steps:
     - uses: actions/checkout@v4
@@ -197,6 +201,7 @@ jobs:
   benchmarks:
     name: Performance Benchmarks
     runs-on: ubuntu-latest
+    needs: [sanitizer-asan, sanitizer-tsan, sanitizer-ubsan]
 
     steps:
     - uses: actions/checkout@v4
