@@ -9,6 +9,7 @@ video_samples/
 .cache/
 .cursor/
 .claude/
+planning/
 
 # Coverage reports
 *.gcda
