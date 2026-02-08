@@ -1,9 +1,20 @@
 build/
+build-*/
 .vscode/
 BigBuckBunny.mp4
 cmake_build_debug/
 .idea/
-docs/
 video_samples/
 .cache/
 .cursor/
+
+# Coverage reports
+*.gcda
+*.gcno
+*.gcov
+coverage/
+*.info
+
+# Benchmark results
+baseline_*.json
+benchmark_*.json

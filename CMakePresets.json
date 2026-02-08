@@ -60,6 +60,54 @@
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "VCPKG_TARGET_TRIPLET": "x64-windows"
             }
+        },
+        {
+            "name": "coverage-linux",
+            "inherits": "base",
+            "displayName": "Coverage (Linux/macOS)",
+            "description": "Build with code coverage instrumentation (gcov/lcov)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build-coverage",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_CXX_FLAGS_DEBUG": "-g -O0 --coverage -fprofile-arcs -ftest-coverage"
+            }
+        },
+        {
+            "name": "asan-linux",
+            "inherits": "base",
+            "displayName": "AddressSanitizer (Linux/macOS)",
+            "description": "Build with AddressSanitizer to detect memory errors",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build-asan",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_CXX_FLAGS_DEBUG": "-g -O1 -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls"
+            }
+        },
+        {
+            "name": "tsan-linux",
+            "inherits": "base",
+            "displayName": "ThreadSanitizer (Linux/macOS)",
+            "description": "Build with ThreadSanitizer to detect data races",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build-tsan",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_CXX_FLAGS_DEBUG": "-g -O1 -fsanitize=thread"
+            }
+        },
+        {
+            "name": "ubsan-linux",
+            "inherits": "base",
+            "displayName": "UndefinedBehaviorSanitizer (Linux/macOS)",
+            "description": "Build with UBSan to detect undefined behavior",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build-ubsan",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_CXX_FLAGS_DEBUG": "-g -O1 -fsanitize=undefined -fno-sanitize-recover=all"
+            }
         }
     ],
     "buildPresets": [
@@ -78,6 +126,22 @@
         {
             "name": "debug-windows-clang",
             "configurePreset": "debug-windows-clang"
+        },
+        {
+            "name": "coverage-linux",
+            "configurePreset": "coverage-linux"
+        },
+        {
+            "name": "asan-linux",
+            "configurePreset": "asan-linux"
+        },
+        {
+            "name": "tsan-linux",
+            "configurePreset": "tsan-linux"
+        },
+        {
+            "name": "ubsan-linux",
+            "configurePreset": "ubsan-linux"
         }
     ],
     "testPresets": [
@@ -105,6 +169,34 @@
         {
             "name": "debug-windows-clang",
             "configurePreset": "debug-windows-clang",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "coverage-linux",
+            "configurePreset": "coverage-linux",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "asan-linux",
+            "configurePreset": "asan-linux",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "tsan-linux",
+            "configurePreset": "tsan-linux",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "ubsan-linux",
+            "configurePreset": "ubsan-linux",
             "output": {
                 "outputOnFailure": true
             }

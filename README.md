@@ -1,5 +1,9 @@
 # YAPL - Yet Another Playback Library
 
+[![CI](https://github.com/AlexandarDjordjevic/yet-another-playback-library/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexandarDjordjevic/yet-another-playback-library/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/AlexandarDjordjevic/yet-another-playback-library/branch/master/graph/badge.svg)](https://codecov.io/gh/AlexandarDjordjevic/yet-another-playback-library)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A lightweight, modular C++20 library for building media player applications. YAPL provides a clean API for audio and video playback with extensible architecture for custom renderers and input handling.
 
 ## Features
@@ -220,6 +224,69 @@ LOG_INFO("{}", stats.to_string());
 |--------|---------|-------------|
 | `YAPL_BUILD_TESTS` | `ON` | Build unit tests |
 | `YAPL_BUILD_EXAMPLES` | `ON` | Build examples |
+| `YAPL_BUILD_BENCHMARKS` | `ON` | Build performance benchmarks |
+
+## Testing and Quality Assurance
+
+### Running Tests
+
+```bash
+# Build and run tests
+cmake --preset debug-linux
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+### Code Coverage
+
+```bash
+# Build with coverage instrumentation
+cmake --preset coverage-linux
+cmake --build build-coverage
+ctest --test-dir build-coverage
+
+# Generate HTML report
+./scripts/generate_coverage.sh
+xdg-open build-coverage/coverage/index.html
+```
+
+### Sanitizers
+
+Run with sanitizers to detect memory errors, race conditions, and undefined behavior:
+
+```bash
+# AddressSanitizer (memory errors)
+cmake --preset asan-linux
+cmake --build build-asan
+ctest --test-dir build-asan
+
+# ThreadSanitizer (race conditions)
+cmake --preset tsan-linux
+cmake --build build-tsan
+TSAN_OPTIONS="second_deadlock_stack=1" ctest --test-dir build-tsan
+
+# UndefinedBehaviorSanitizer
+cmake --preset ubsan-linux
+cmake --build build-ubsan
+ctest --test-dir build-ubsan
+
+# Run all sanitizers
+./scripts/run_sanitizers.sh
+```
+
+### Performance Benchmarks
+
+```bash
+# Build and run benchmarks
+cmake --preset release-linux
+cmake --build build-release
+./build-release/benchmarks/yapl_benchmarks
+
+# Save baseline for comparison
+./build-release/benchmarks/yapl_benchmarks --benchmark_out=baseline.json
+```
+
+See [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) and [benchmarks/OPTIMIZATION_GUIDE.md](benchmarks/OPTIMIZATION_GUIDE.md) for detailed information.
 
 ## License
 
