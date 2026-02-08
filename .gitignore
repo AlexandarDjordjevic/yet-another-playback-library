@@ -3,10 +3,13 @@ build-*/
 .vscode/
 BigBuckBunny.mp4
 cmake_build_debug/
+build-coverage/
 .idea/
 video_samples/
 .cache/
 .cursor/
+.claude/
+planning/
 
 # Coverage reports
 *.gcda
