@@ -22,6 +22,8 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y \
           ninja-build \
+          libspdlog-dev \
+          libfmt-dev \
           libsdl2-dev \
           libavcodec-dev \
           libavformat-dev \
@@ -49,6 +51,8 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y \
           ninja-build \
+          libspdlog-dev \
+          libfmt-dev \
           libsdl2-dev \
           libavcodec-dev \
           libavformat-dev \
@@ -78,6 +82,8 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y \
           ninja-build \
+          libspdlog-dev \
+          libfmt-dev \
           libsdl2-dev \
           libavcodec-dev \
           libavformat-dev \
@@ -107,6 +113,8 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y \
           ninja-build \
+          libspdlog-dev \
+          libfmt-dev \
           libsdl2-dev \
           libavcodec-dev \
           libavformat-dev \
@@ -137,6 +145,8 @@ jobs:
         sudo apt-get install -y \
           ninja-build \
           lcov \
+          libspdlog-dev \
+          libfmt-dev \
           libsdl2-dev \
           libavcodec-dev \
           libavformat-dev \
@@ -191,6 +201,8 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y \
           ninja-build \
+          libspdlog-dev \
+          libfmt-dev \
           libsdl2-dev \
           libavcodec-dev \
           libavformat-dev \
