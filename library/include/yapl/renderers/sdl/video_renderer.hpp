@@ -13,7 +13,7 @@
 namespace yapl::renderers::sdl {
 
 struct video_renderer : i_video_renderer {
-    explicit video_renderer(media_clock &clock);
+    video_renderer(media_clock &clock, size_t queue_size);
     ~video_renderer() override;
 
     void resize(size_t width, size_t height) override;
@@ -31,7 +31,7 @@ struct video_renderer : i_video_renderer {
     size_t m_height;
     std::atomic<int64_t> m_current_position_ms{0};
     std::optional<std::shared_ptr<media_sample>> m_pending_frame;
-    blocking_queue<std::shared_ptr<media_sample>> m_frames{60};
+    blocking_queue<std::shared_ptr<media_sample>> m_frames;
     std::optional<detail::sdl_window_handle> m_window;
     std::optional<detail::sdl_renderer_handle> m_renderer;
     std::optional<detail::sdl_texture_handle> m_texture;

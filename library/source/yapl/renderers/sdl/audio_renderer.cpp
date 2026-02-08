@@ -28,7 +28,8 @@ constexpr uint32_t kTargetQueueBytes = kBytesPerSecond / 10;
 constexpr uint32_t kMaxQueueBytes = kBytesPerSecond / 5;
 } // namespace
 
-audio_renderer::audio_renderer(media_clock &clock) : m_clock{clock} {
+audio_renderer::audio_renderer(media_clock &clock, size_t queue_size)
+    : m_clock{clock}, m_frames{queue_size} {
     if (SDL_Init(SDL_INIT_AUDIO) != 0) {
         throw std::runtime_error("Failed to Initialize SDL audio!");
     }

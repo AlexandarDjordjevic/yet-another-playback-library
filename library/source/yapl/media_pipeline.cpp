@@ -21,14 +21,18 @@ media_pipeline::media_pipeline(
     std::unique_ptr<decoders::i_decoder_factory> df,
     std::unique_ptr<renderers::i_video_renderer_factory> vrf,
     std::unique_ptr<renderers::i_audio_renderer_factory> arf,
-    std::unique_ptr<input::i_input_handler_factory> ihf)
+    std::unique_ptr<input::i_input_handler_factory> ihf,
+    pipeline_config config)
     : m_media_source_factory{std::move(msf)},
       m_media_extractor_factory{std::move(mef)},
       m_decoder_factory{std::move(df)},
+      m_config{std::move(config)},
       m_media_source{m_media_source_factory->create()},
       m_media_extractor{m_media_extractor_factory->create(m_media_source)},
-      m_video_render{vrf->create_video_renderer(m_media_clock)},
-      m_audio_render{arf->create_audio_renderer(m_media_clock)},
+      m_video_render{vrf->create_video_renderer(m_media_clock,
+                                                 m_config.video_queue_size)},
+      m_audio_render{arf->create_audio_renderer(m_media_clock,
+                                                 m_config.audio_queue_size)},
       m_input_handler{ihf->create()} {}
 
 media_pipeline::~media_pipeline() {

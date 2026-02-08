@@ -9,7 +9,7 @@ namespace yapl::renderers {
 
 struct i_audio_renderer_factory {
     virtual std::unique_ptr<i_audio_renderer>
-    create_audio_renderer(media_clock &clock) = 0;
+    create_audio_renderer(media_clock &clock, size_t queue_size) = 0;
     virtual ~i_audio_renderer_factory() = default;
 };
 
