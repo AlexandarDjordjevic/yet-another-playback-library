@@ -8,6 +8,8 @@ on:
 
 env:
   BUILD_TYPE: Debug
+  CCACHE_DIR: ${{ github.workspace }}/.ccache
+  CCACHE_MAXSIZE: 500M
 
 jobs:
   build-and-test:
@@ -17,10 +19,19 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Cache APT packages
+      uses: actions/cache@v4
+      with:
+        path: /var/cache/apt/archives
+        key: apt-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
+        restore-keys: |
+          apt-${{ runner.os }}-
+
     - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
+          ccache \
           ninja-build \
           libspdlog-dev \
           libfmt-dev \
@@ -33,11 +44,24 @@ jobs:
           libcurl4-openssl-dev \
           libgtest-dev
 
+    - name: Setup ccache
+      uses: actions/cache@v4
+      with:
+        path: .ccache
+        key: ccache-${{ runner.os }}-debug-${{ github.sha }}
+        restore-keys: |
+          ccache-${{ runner.os }}-debug-
+
     - name: Configure CMake
-      run: cmake --preset debug-linux
+      run: |
+        export PATH="/usr/lib/ccache:$PATH"
+        cmake --preset debug-linux -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
     - name: Build
-      run: cmake --build build --config ${{env.BUILD_TYPE}}
+      run: |
+        export PATH="/usr/lib/ccache:$PATH"
+        cmake --build build --config ${{env.BUILD_TYPE}}
+        ccache -s
 
     - name: Test
       run: ctest --test-dir build --output-on-failure --verbose
@@ -50,10 +74,19 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Cache APT packages
+      uses: actions/cache@v4
+      with:
+        path: /var/cache/apt/archives
+        key: apt-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
+        restore-keys: |
+          apt-${{ runner.os }}-
+
     - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
+          ccache \
           ninja-build \
           libspdlog-dev \
           libfmt-dev \
@@ -66,11 +99,24 @@ jobs:
           libcurl4-openssl-dev \
           libgtest-dev
 
+    - name: Setup ccache
+      uses: actions/cache@v4
+      with:
+        path: .ccache
+        key: ccache-${{ runner.os }}-asan-${{ github.sha }}
+        restore-keys: |
+          ccache-${{ runner.os }}-asan-
+
     - name: Configure CMake (ASan)
-      run: cmake --preset asan-linux
+      run: |
+        export PATH="/usr/lib/ccache:$PATH"
+        cmake --preset asan-linux -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
     - name: Build
-      run: cmake --build build-asan
+      run: |
+        export PATH="/usr/lib/ccache:$PATH"
+        cmake --build build-asan
+        ccache -s
 
     - name: Test with ASan
       env:
@@ -85,10 +131,19 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Cache APT packages
+      uses: actions/cache@v4
+      with:
+        path: /var/cache/apt/archives
+        key: apt-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
+        restore-keys: |
+          apt-${{ runner.os }}-
+
     - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
+          ccache \
           ninja-build \
           libspdlog-dev \
           libfmt-dev \
@@ -101,11 +156,24 @@ jobs:
           libcurl4-openssl-dev \
           libgtest-dev
 
+    - name: Setup ccache
+      uses: actions/cache@v4
+      with:
+        path: .ccache
+        key: ccache-${{ runner.os }}-tsan-${{ github.sha }}
+        restore-keys: |
+          ccache-${{ runner.os }}-tsan-
+
     - name: Configure CMake (TSan)
-      run: cmake --preset tsan-linux
+      run: |
+        export PATH="/usr/lib/ccache:$PATH"
+        cmake --preset tsan-linux -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
     - name: Build
-      run: cmake --build build-tsan
+      run: |
+        export PATH="/usr/lib/ccache:$PATH"
+        cmake --build build-tsan
+        ccache -s
 
     - name: Test with TSan
       env:
@@ -120,10 +188,19 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Cache APT packages
+      uses: actions/cache@v4
+      with:
+        path: /var/cache/apt/archives
+        key: apt-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
+        restore-keys: |
+          apt-${{ runner.os }}-
+
     - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
+          ccache \
           ninja-build \
           libspdlog-dev \
           libfmt-dev \
@@ -136,11 +213,24 @@ jobs:
           libcurl4-openssl-dev \
           libgtest-dev
 
+    - name: Setup ccache
+      uses: actions/cache@v4
+      with:
+        path: .ccache
+        key: ccache-${{ runner.os }}-ubsan-${{ github.sha }}
+        restore-keys: |
+          ccache-${{ runner.os }}-ubsan-
+
     - name: Configure CMake (UBSan)
-      run: cmake --preset ubsan-linux
+      run: |
+        export PATH="/usr/lib/ccache:$PATH"
+        cmake --preset ubsan-linux -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
     - name: Build
-      run: cmake --build build-ubsan
+      run: |
+        export PATH="/usr/lib/ccache:$PATH"
+        cmake --build build-ubsan
+        ccache -s
 
     - name: Test with UBSan
       env:
@@ -155,10 +245,19 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Cache APT packages
+      uses: actions/cache@v4
+      with:
+        path: /var/cache/apt/archives
+        key: apt-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
+        restore-keys: |
+          apt-${{ runner.os }}-
+
     - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
+          ccache \
           ninja-build \
           lcov \
           libspdlog-dev \
@@ -172,11 +271,24 @@ jobs:
           libcurl4-openssl-dev \
           libgtest-dev
 
+    - name: Setup ccache
+      uses: actions/cache@v4
+      with:
+        path: .ccache
+        key: ccache-${{ runner.os }}-coverage-${{ github.sha }}
+        restore-keys: |
+          ccache-${{ runner.os }}-coverage-
+
     - name: Configure CMake (Coverage)
-      run: cmake --preset coverage-linux
+      run: |
+        export PATH="/usr/lib/ccache:$PATH"
+        cmake --preset coverage-linux -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
     - name: Build
-      run: cmake --build build-coverage
+      run: |
+        export PATH="/usr/lib/ccache:$PATH"
+        cmake --build build-coverage
+        ccache -s
 
     - name: Test
       run: ctest --test-dir build-coverage --output-on-failure
@@ -216,10 +328,19 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Cache APT packages
+      uses: actions/cache@v4
+      with:
+        path: /var/cache/apt/archives
+        key: apt-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
+        restore-keys: |
+          apt-${{ runner.os }}-
+
     - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
+          ccache \
           ninja-build \
           libspdlog-dev \
           libfmt-dev \
@@ -232,11 +353,24 @@ jobs:
           libcurl4-openssl-dev \
           libgtest-dev
 
+    - name: Setup ccache
+      uses: actions/cache@v4
+      with:
+        path: .ccache
+        key: ccache-${{ runner.os }}-release-${{ github.sha }}
+        restore-keys: |
+          ccache-${{ runner.os }}-release-
+
     - name: Configure CMake (Release)
-      run: cmake --preset release-linux
+      run: |
+        export PATH="/usr/lib/ccache:$PATH"
+        cmake --preset release-linux -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
     - name: Build
-      run: cmake --build build-release
+      run: |
+        export PATH="/usr/lib/ccache:$PATH"
+        cmake --build build-release
+        ccache -s
 
     - name: Run benchmarks
       run: |
