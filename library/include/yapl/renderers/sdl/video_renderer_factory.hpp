@@ -6,8 +6,9 @@
 namespace yapl::renderers::sdl {
 
 struct video_renderer_factory : i_video_renderer_factory {
-    std::unique_ptr<i_video_renderer> create_video_renderer() override {
-        return std::make_unique<video_renderer>();
+    std::unique_ptr<i_video_renderer>
+    create_video_renderer(media_clock &clock) override {
+        return std::make_unique<video_renderer>(clock);
     }
 };
 

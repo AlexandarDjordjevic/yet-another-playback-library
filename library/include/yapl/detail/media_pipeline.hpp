@@ -14,6 +14,7 @@
 #include "yapl/renderers/i_audio_renderer_factory.hpp"
 #include "yapl/renderers/i_video_renderer.hpp"
 #include "yapl/renderers/i_video_renderer_factory.hpp"
+#include "yapl/renderers/media_clock.hpp"
 #include "yapl/track.hpp"
 
 #include <atomic>
@@ -55,6 +56,7 @@ class media_pipeline {
     std::atomic_bool m_running{false};
     std::atomic_bool m_paused{false};
 
+    renderers::media_clock m_media_clock;
     std::shared_ptr<i_media_source> m_media_source;
     std::unique_ptr<i_media_extractor> m_media_extractor;
     std::vector<std::shared_ptr<track>> m_tracks;

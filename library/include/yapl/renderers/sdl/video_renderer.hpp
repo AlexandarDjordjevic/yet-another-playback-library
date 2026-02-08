@@ -2,6 +2,7 @@
 
 #include "yapl/detail/blocking_queue.hpp"
 #include "yapl/renderers/i_video_renderer.hpp"
+#include "yapl/renderers/media_clock.hpp"
 
 #include <SDL2/SDL.h>
 #include <atomic>
@@ -11,7 +12,7 @@
 namespace yapl::renderers::sdl {
 
 struct video_renderer : i_video_renderer {
-    video_renderer();
+    explicit video_renderer(media_clock &clock);
     ~video_renderer() override;
 
     void resize(size_t width, size_t height) override;
@@ -24,6 +25,7 @@ struct video_renderer : i_video_renderer {
     [[nodiscard]] int64_t get_current_position_ms() const override;
 
   private:
+    media_clock &m_clock;
     size_t m_width;
     size_t m_height;
     std::atomic<int64_t> m_current_position_ms{0};
