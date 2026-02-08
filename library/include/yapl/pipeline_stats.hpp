@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <fmt/format.h>
 #include <string>
 
 namespace yapl {
@@ -22,8 +23,8 @@ struct queue_stats {
 };
 
 struct progress_info {
-    int64_t position_ms{0};  // Current playback position in milliseconds
-    int64_t duration_ms{0};  // Total duration in milliseconds
+    int64_t position_ms{0}; // Current playback position in milliseconds
+    int64_t duration_ms{0}; // Total duration in milliseconds
 
     [[nodiscard]] constexpr float progress_percent() const noexcept {
         return duration_ms > 0
@@ -70,8 +71,8 @@ struct pipeline_stats {
     queue_stats audio_renderer_queue;
 
     [[nodiscard]] std::string to_string() const {
-        return progress.to_string() + " | Source: " +
-               format_bytes(media_source_buffered_bytes) +
+        return progress.to_string() +
+               " | Source: " + format_bytes(media_source_buffered_bytes) +
                " | VTrack: " + video_track_queue.to_string() +
                " | ATrack: " + audio_track_queue.to_string() +
                " | VRender: " + video_renderer_queue.to_string() +
@@ -81,11 +82,12 @@ struct pipeline_stats {
   private:
     [[nodiscard]] static std::string format_bytes(size_t bytes) {
         if (bytes >= 1024 * 1024) {
-            return std::to_string(bytes / (1024 * 1024)) + "MB";
-        } else if (bytes >= 1024) {
-            return std::to_string(bytes / 1024) + "KB";
+            return fmt::format("{:.2f}MB", bytes / 1024.0 / 1024.0);
         }
-        return std::to_string(bytes) + "B";
+        if (bytes >= 1024) {
+            return fmt::format("{:.2f}KB", bytes / 1024.0);
+        }
+        return fmt::format("{:.2f}B", static_cast<double>(bytes));
     }
 };
 
