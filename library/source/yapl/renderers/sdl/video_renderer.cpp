@@ -13,8 +13,8 @@ constexpr size_t kDefaultHeight = 480;
 constexpr int64_t kFrameToleranceMs = 15;
 } // namespace
 
-video_renderer::video_renderer()
-    : m_width{kDefaultWidth}, m_height{kDefaultHeight} {
+video_renderer::video_renderer(media_clock &clock)
+    : m_clock{clock}, m_width{kDefaultWidth}, m_height{kDefaultHeight} {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         throw std::runtime_error("Failed to Initialize SDL video!");
     }
@@ -76,24 +76,24 @@ void video_renderer::push_frame(std::shared_ptr<media_sample> frame) {
 }
 
 void video_renderer::pause() {
-    media_clock::instance().pause();
+    m_clock.pause();
     LOG_TRACE("Video renderer paused");
 }
 
 void video_renderer::resume() {
-    media_clock::instance().resume();
+    m_clock.resume();
     LOG_TRACE("Video renderer resumed");
 }
 
 void video_renderer::stop() {
     m_frames.shutdown();
     m_pending_frame.reset();
-    media_clock::instance().reset();
+    m_clock.reset();
     LOG_TRACE("Video renderer stopped");
 }
 
 void video_renderer::render() {
-    auto &clock = media_clock::instance();
+    auto &clock = m_clock;
 
     if (m_frames.is_empty() || clock.is_paused()) {
         return;

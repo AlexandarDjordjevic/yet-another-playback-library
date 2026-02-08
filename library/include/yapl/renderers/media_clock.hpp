@@ -10,10 +10,7 @@ namespace yapl::renderers {
 /// Both audio and video renderers use this to determine playback timing.
 class media_clock {
   public:
-    static media_clock &instance() {
-        static media_clock clock;
-        return clock;
-    }
+    media_clock() = default;
 
     /// Start the clock (called when first frame is ready to render)
     void start() {
@@ -87,10 +84,13 @@ class media_clock {
     [[nodiscard]] bool is_started() const { return m_started; }
     [[nodiscard]] bool is_paused() const { return m_paused; }
 
-  private:
-    media_clock() = default;
+    // Non-copyable, non-movable (contains atomics)
     media_clock(const media_clock &) = delete;
     media_clock &operator=(const media_clock &) = delete;
+    media_clock(media_clock &&) = delete;
+    media_clock &operator=(media_clock &&) = delete;
+
+  private:
 
     std::chrono::steady_clock::time_point m_start_time;
     std::chrono::steady_clock::time_point m_pause_start;

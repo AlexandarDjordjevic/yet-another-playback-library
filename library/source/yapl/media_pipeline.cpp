@@ -27,8 +27,8 @@ media_pipeline::media_pipeline(
       m_decoder_factory{std::move(df)},
       m_media_source{m_media_source_factory->create()},
       m_media_extractor{m_media_extractor_factory->create(m_media_source)},
-      m_video_render{vrf->create_video_renderer()},
-      m_audio_render{arf->create_audio_renderer()},
+      m_video_render{vrf->create_video_renderer(m_media_clock)},
+      m_audio_render{arf->create_audio_renderer(m_media_clock)},
       m_input_handler{ihf->create()} {}
 
 media_pipeline::~media_pipeline() {
