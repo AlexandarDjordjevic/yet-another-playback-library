@@ -13,8 +13,9 @@ constexpr size_t kDefaultHeight = 480;
 constexpr int64_t kFrameToleranceMs = 15;
 } // namespace
 
-video_renderer::video_renderer(media_clock &clock)
-    : m_clock{clock}, m_width{kDefaultWidth}, m_height{kDefaultHeight} {
+video_renderer::video_renderer(media_clock &clock, size_t queue_size)
+    : m_clock{clock}, m_width{kDefaultWidth}, m_height{kDefaultHeight},
+      m_frames{queue_size} {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         throw std::runtime_error("Failed to Initialize SDL video!");
     }

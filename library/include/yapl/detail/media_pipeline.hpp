@@ -9,6 +9,7 @@
 #include "yapl/input/i_input_handler.hpp"
 #include "yapl/input/i_input_handler_factory.hpp"
 #include "yapl/media_info.hpp"
+#include "yapl/pipeline_config.hpp"
 #include "yapl/pipeline_stats.hpp"
 #include "yapl/renderers/i_audio_renderer.hpp"
 #include "yapl/renderers/i_audio_renderer_factory.hpp"
@@ -29,7 +30,8 @@ class media_pipeline {
                    std::unique_ptr<decoders::i_decoder_factory> df,
                    std::unique_ptr<renderers::i_video_renderer_factory> vrf,
                    std::unique_ptr<renderers::i_audio_renderer_factory> arf,
-                   std::unique_ptr<input::i_input_handler_factory> ihf);
+                   std::unique_ptr<input::i_input_handler_factory> ihf,
+                   pipeline_config config = {});
     ~media_pipeline();
 
     media_pipeline() = delete;
@@ -52,6 +54,7 @@ class media_pipeline {
     std::unique_ptr<i_media_source_factory> m_media_source_factory;
     std::unique_ptr<i_media_extractor_factory> m_media_extractor_factory;
     std::unique_ptr<decoders::i_decoder_factory> m_decoder_factory;
+    pipeline_config m_config;
 
     std::atomic_bool m_running{false};
     std::atomic_bool m_paused{false};

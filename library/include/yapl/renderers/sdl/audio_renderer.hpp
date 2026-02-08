@@ -11,7 +11,7 @@
 namespace yapl::renderers::sdl {
 
 struct audio_renderer : i_audio_renderer {
-    explicit audio_renderer(media_clock &clock);
+    audio_renderer(media_clock &clock, size_t queue_size);
     ~audio_renderer() override;
 
     void push_frame(std::shared_ptr<media_sample> frame) override;
@@ -23,7 +23,7 @@ struct audio_renderer : i_audio_renderer {
 
   private:
     media_clock &m_clock;
-    blocking_queue<std::shared_ptr<media_sample>> m_frames{60};
+    blocking_queue<std::shared_ptr<media_sample>> m_frames;
     std::optional<detail::sdl_audio_device_handle> m_audio_device;
     std::optional<std::shared_ptr<media_sample>> m_pending_frame;
 };
