@@ -15,6 +15,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Options
 option(YAPL_BUILD_TESTS "Build unit tests" ON)
 option(YAPL_BUILD_EXAMPLES "Build examples" ON)
+option(YAPL_BUILD_BENCHMARKS "Build benchmarks" ON)
 
 add_subdirectory(library)
 
@@ -25,4 +26,8 @@ endif()
 if(YAPL_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
+endif()
+
+if(YAPL_BUILD_BENCHMARKS)
+    add_subdirectory(benchmarks)
 endif()
