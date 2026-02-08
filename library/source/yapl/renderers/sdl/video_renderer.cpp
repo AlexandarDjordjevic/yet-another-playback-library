@@ -19,27 +19,21 @@ video_renderer::video_renderer(media_clock &clock)
         throw std::runtime_error("Failed to Initialize SDL video!");
     }
 
-    m_window =
-        SDL_CreateWindow("YAPL", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                         static_cast<int>(m_width), static_cast<int>(m_height),
-                         SDL_WINDOW_SHOWN);
+    m_window.emplace("YAPL", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                     static_cast<int>(m_width), static_cast<int>(m_height),
+                     SDL_WINDOW_SHOWN);
 
-    m_renderer = SDL_CreateRenderer(
-        m_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    m_renderer.emplace(m_window->get(), -1,
+                       SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
-    m_texture = SDL_CreateTexture(
-        m_renderer, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING,
-        static_cast<int>(m_width), static_cast<int>(m_height));
+    m_texture.emplace(m_renderer->get(), SDL_PIXELFORMAT_IYUV,
+                      SDL_TEXTUREACCESS_STREAMING, static_cast<int>(m_width),
+                      static_cast<int>(m_height));
 }
 
 video_renderer::~video_renderer() {
     stop();
-    if (m_texture)
-        SDL_DestroyTexture(m_texture);
-    if (m_renderer)
-        SDL_DestroyRenderer(m_renderer);
-    if (m_window)
-        SDL_DestroyWindow(m_window);
+    // RAII handles clean up automatically
     LOG_TRACE("Video renderer destroyed");
 }
 
@@ -47,24 +41,21 @@ void video_renderer::resize(size_t width, size_t height) {
     m_width = width;
     m_height = height;
 
-    if (m_texture)
-        SDL_DestroyTexture(m_texture);
-    if (m_renderer)
-        SDL_DestroyRenderer(m_renderer);
-    if (m_window)
-        SDL_DestroyWindow(m_window);
+    // Reset and recreate resources (RAII handles clean up automatically)
+    m_texture.reset();
+    m_renderer.reset();
+    m_window.reset();
 
-    m_window =
-        SDL_CreateWindow("YAPL", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                         static_cast<int>(m_width), static_cast<int>(m_height),
-                         SDL_WINDOW_SHOWN);
+    m_window.emplace("YAPL", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                     static_cast<int>(m_width), static_cast<int>(m_height),
+                     SDL_WINDOW_SHOWN);
 
-    m_renderer = SDL_CreateRenderer(
-        m_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    m_renderer.emplace(m_window->get(), -1,
+                       SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
-    m_texture = SDL_CreateTexture(
-        m_renderer, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING,
-        static_cast<int>(m_width), static_cast<int>(m_height));
+    m_texture.emplace(m_renderer->get(), SDL_PIXELFORMAT_IYUV,
+                      SDL_TEXTUREACCESS_STREAMING, static_cast<int>(m_width),
+                      static_cast<int>(m_height));
 }
 
 void video_renderer::push_frame(std::shared_ptr<media_sample> frame) {
@@ -147,12 +138,12 @@ void video_renderer::render() {
     uint8_t *const u_plane = y_plane + m_width * m_height;
     uint8_t *const v_plane = u_plane + (m_width * m_height) / 4;
 
-    SDL_UpdateYUVTexture(m_texture, nullptr, y_plane, y_pitch, u_plane, u_pitch,
-                         v_plane, v_pitch);
+    SDL_UpdateYUVTexture(m_texture->get(), nullptr, y_plane, y_pitch, u_plane,
+                         u_pitch, v_plane, v_pitch);
 
-    SDL_RenderClear(m_renderer);
-    SDL_RenderCopy(m_renderer, m_texture, nullptr, nullptr);
-    SDL_RenderPresent(m_renderer);
+    SDL_RenderClear(m_renderer->get());
+    SDL_RenderCopy(m_renderer->get(), m_texture->get(), nullptr, nullptr);
+    SDL_RenderPresent(m_renderer->get());
 }
 
 queue_stats video_renderer::get_queue_stats() const { return m_frames.stats(); }

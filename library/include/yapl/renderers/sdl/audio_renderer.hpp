@@ -1,6 +1,7 @@
 #pragma once
 
 #include "yapl/detail/blocking_queue.hpp"
+#include "yapl/detail/sdl_resource_handles.hpp"
 #include "yapl/renderers/i_audio_renderer.hpp"
 #include "yapl/renderers/media_clock.hpp"
 
@@ -23,7 +24,7 @@ struct audio_renderer : i_audio_renderer {
   private:
     media_clock &m_clock;
     blocking_queue<std::shared_ptr<media_sample>> m_frames{60};
-    SDL_AudioDeviceID m_audio_device{0};
+    std::optional<detail::sdl_audio_device_handle> m_audio_device;
     std::optional<std::shared_ptr<media_sample>> m_pending_frame;
 };
 

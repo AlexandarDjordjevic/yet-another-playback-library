@@ -42,20 +42,14 @@ audio_renderer::audio_renderer(media_clock &clock) : m_clock{clock} {
     want.samples = 1024;
     want.callback = NULL;
 
-    m_audio_device = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
-    if (!m_audio_device) {
-        throw std::runtime_error{
-            fmt::format("SDL_OpenAudioDevice failed: {}", SDL_GetError())};
-    }
+    m_audio_device.emplace(nullptr, 0, &want, &have, 0);
 
-    SDL_PauseAudioDevice(m_audio_device, 0);
+    SDL_PauseAudioDevice(m_audio_device->get(), 0);
 }
 
 audio_renderer::~audio_renderer() {
     stop();
-    if (m_audio_device) {
-        SDL_CloseAudioDevice(m_audio_device);
-    }
+    // RAII handle cleans up automatically
     LOG_TRACE("Audio renderer destroyed");
 }
 
@@ -75,7 +69,7 @@ void audio_renderer::render() {
     }
 
     // Check current SDL queue size
-    uint32_t queued_bytes = SDL_GetQueuedAudioSize(m_audio_device);
+    uint32_t queued_bytes = SDL_GetQueuedAudioSize(m_audio_device->get());
     int64_t sdl_buffer_ms = bytes_to_ms(queued_bytes);
 
     // Report audio latency to clock so video can sync
@@ -127,7 +121,7 @@ void audio_renderer::render() {
         last_log_time = audio_playback_pos;
     }
 
-    auto result = SDL_QueueAudio(m_audio_device, frame->data.data(),
+    auto result = SDL_QueueAudio(m_audio_device->get(), frame->data.data(),
                                  static_cast<uint32_t>(frame->data.size()));
     if (result < 0) {
         LOG_ERROR("SDL_QueueAudio failed: {}", SDL_GetError());
@@ -136,14 +130,14 @@ void audio_renderer::render() {
 
 void audio_renderer::pause() {
     if (m_audio_device) {
-        SDL_PauseAudioDevice(m_audio_device, 1);
+        SDL_PauseAudioDevice(m_audio_device->get(), 1);
     }
     LOG_TRACE("Audio renderer paused");
 }
 
 void audio_renderer::resume() {
     if (m_audio_device) {
-        SDL_PauseAudioDevice(m_audio_device, 0);
+        SDL_PauseAudioDevice(m_audio_device->get(), 0);
     }
     LOG_TRACE("Audio renderer resumed");
 }
@@ -152,8 +146,8 @@ void audio_renderer::stop() {
     m_frames.shutdown();
     m_pending_frame.reset();
     if (m_audio_device) {
-        SDL_PauseAudioDevice(m_audio_device, 1);
-        SDL_ClearQueuedAudio(m_audio_device);
+        SDL_PauseAudioDevice(m_audio_device->get(), 1);
+        SDL_ClearQueuedAudio(m_audio_device->get());
     }
     LOG_TRACE("Audio renderer stopped");
 }

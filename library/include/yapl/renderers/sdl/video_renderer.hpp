@@ -1,6 +1,7 @@
 #pragma once
 
 #include "yapl/detail/blocking_queue.hpp"
+#include "yapl/detail/sdl_resource_handles.hpp"
 #include "yapl/renderers/i_video_renderer.hpp"
 #include "yapl/renderers/media_clock.hpp"
 
@@ -31,9 +32,9 @@ struct video_renderer : i_video_renderer {
     std::atomic<int64_t> m_current_position_ms{0};
     std::optional<std::shared_ptr<media_sample>> m_pending_frame;
     blocking_queue<std::shared_ptr<media_sample>> m_frames{60};
-    SDL_Window *m_window{nullptr};
-    SDL_Renderer *m_renderer{nullptr};
-    SDL_Texture *m_texture{nullptr};
+    std::optional<detail::sdl_window_handle> m_window;
+    std::optional<detail::sdl_renderer_handle> m_renderer;
+    std::optional<detail::sdl_texture_handle> m_texture;
 };
 
 } // namespace yapl::renderers::sdl
