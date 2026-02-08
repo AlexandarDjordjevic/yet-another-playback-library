@@ -29,7 +29,9 @@ jobs:
           libavformat-dev \
           libavutil-dev \
           libswscale-dev \
-          libcurl4-openssl-dev
+          libswresample-dev \
+          libcurl4-openssl-dev \
+          libgtest-dev
 
     - name: Configure CMake
       run: cmake --preset debug-linux
@@ -60,7 +62,9 @@ jobs:
           libavformat-dev \
           libavutil-dev \
           libswscale-dev \
-          libcurl4-openssl-dev
+          libswresample-dev \
+          libcurl4-openssl-dev \
+          libgtest-dev
 
     - name: Configure CMake (ASan)
       run: cmake --preset asan-linux
@@ -93,7 +97,9 @@ jobs:
           libavformat-dev \
           libavutil-dev \
           libswscale-dev \
-          libcurl4-openssl-dev
+          libswresample-dev \
+          libcurl4-openssl-dev \
+          libgtest-dev
 
     - name: Configure CMake (TSan)
       run: cmake --preset tsan-linux
@@ -126,7 +132,9 @@ jobs:
           libavformat-dev \
           libavutil-dev \
           libswscale-dev \
-          libcurl4-openssl-dev
+          libswresample-dev \
+          libcurl4-openssl-dev \
+          libgtest-dev
 
     - name: Configure CMake (UBSan)
       run: cmake --preset ubsan-linux
@@ -160,7 +168,9 @@ jobs:
           libavformat-dev \
           libavutil-dev \
           libswscale-dev \
-          libcurl4-openssl-dev
+          libswresample-dev \
+          libcurl4-openssl-dev \
+          libgtest-dev
 
     - name: Configure CMake (Coverage)
       run: cmake --preset coverage-linux
@@ -218,7 +228,9 @@ jobs:
           libavformat-dev \
           libavutil-dev \
           libswscale-dev \
-          libcurl4-openssl-dev
+          libswresample-dev \
+          libcurl4-openssl-dev \
+          libgtest-dev
 
     - name: Configure CMake (Release)
       run: cmake --preset release-linux
